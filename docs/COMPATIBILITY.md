@@ -2,82 +2,98 @@
 
 ## Observed development environment
 
-These are local observations, not minimum supported versions or evidence of end-to-end compatibility.
+Local observations, not a complete supported-version matrix:
 
 | Item | Finding |
 | --- | --- |
 | Project root | `/home/deck/Developer/TailSwitch` |
 | OS | SteamOS 3.10, steamdeck variant |
 | Desktop | KDE, Wayland session |
-| Qt | qmake6 reports 6.11.1; qt6-base and qt6-tools packages present |
+| Host Qt | 6.11.1 |
+| Host KF6StatusNotifierItem / WindowSystem | 6.28.0 |
 | Tailscale CLI | `/opt/tailscale/tailscale`, version 1.102.3 |
-| Host build tools | No cmake, ninja, make, gcc, g++, clang++, or pkg-config found on host PATH |
-| Build environment | User provisioned `tailswitch-dev`, Ubuntu 24.04 under Distrobox |
-| Container toolchain | CMake 3.28.3, GCC 13.3.0, Ninja 1.11.1, Qt 6.4.2 (Core/Gui/Widgets/Test) |
-| Container engine | Podman 6.0.2; container builds verified |
+| Host build tools | Compiler/CMake not installed; keep SteamOS base untouched |
+| Active build environment | `tailswitch-kde-dev`, Ubuntu 26.04 under Distrobox |
+| Active toolchain | CMake 4.2.3, GCC 15.2.0, Qt 6.10.2, KF6StatusNotifierItem 6.24.0 |
+| Retained old environment | `tailswitch-dev`, Ubuntu 24.04, Qt 6.4.2; pending cleanup after user validation |
+| Container engine | Podman 6.0.2; builds verified |
 | Host ABI | x86_64, glibc 2.43 |
-| Git | 2.55.0; repository initialized on main; user-configured author identity verified |
+| Git | 2.55.0; main branch; user-configured author identity |
 
-Qt package presence does not prove development headers, CMake metadata, or all required runtime plugins are available. CLI discovery from a desktop launcher may differ from the current shell.
+CMake requires Qt >= 6.8 and KF6StatusNotifierItem >= 6.14, subject to framework package transitive requirements. Only the versions above have been tested. CLI discovery from a desktop launcher may differ from a shell.
 
-## Verified from installed CLI help
+## Verified from installed Tailscale CLI help
 
-- `tailscale status --json` exists. Its help explicitly warns that the JSON format may change across releases.
+- `tailscale status --json` exists; help warns that its format may change across releases.
 - `tailscale set` changes only explicitly specified preferences.
-- `set` offers `--operator`, `--exit-node`, and `--exit-node-allow-lan-access`.
-- An empty exit-node argument disables exit-node use. Pass it as an explicit QProcess argument, not shell text.
-- `tailscale up` with no flags reconnects without changing settings, according to its help. Preference-setting flags instead require the complete desired configuration; the app must not use them for reconnect.
-- `up` can initiate authentication, so v1 must gate reconnect on existing authentication and handle login-required transitions rather than launching a sign-in workflow.
+- `set` supports `--operator`, `--exit-node`, and `--exit-node-allow-lan-access`.
+- An explicit empty exit-node argument disables exit-node use. Pass it as a QProcess argument, not shell text.
+- `tailscale up` without flags reconnects without changing settings. Do not use preference-setting flags or `--reset` for reconnect.
+- `up` can initiate authentication; gate reconnect on existing authentication and handle login-required transitions without a v1 sign-in workflow.
 
-No mutating Tailscale command has been run. Actual daemon access, operator authorization, status JSON, and saved preferences have not yet been inspected.
+No mutating Tailscale commands have been run. Daemon access, operator authorization, real status JSON, and saved preferences remain uninspected.
+
+## Desktop findings and corrections
+
+### Clipboard
+
+The first QClipboard-based implementation failed in user testing. A menu exported to Plasma can invoke app actions without giving the app a Wayland input serial/focused surface.
+
+Host introspection confirmed `org.kde.klipper.klipper.setClipboardContents(s)` at `org.kde.klipper`, `/klipper`. The implementation now calls that API asynchronously with a 3-second timeout, acknowledges success only after a successful reply, and reports errors without a silent Qt fallback. It never reads clipboard/history contents.
+
+**User confirmed that copying works** after this change. Recheck it with the new native tray implementation; clipboard code is unchanged. Automated tests only use a fake clipboard service.
+
+### Left-click tray menus
+
+The initial QSystemTrayIcon menu worked on right-click only. Wiring its primary activation to `QMenu::popup()` then appeared successful in offscreen tests and an activation smoke check, but user testing revealed the Wayland error:
+
+> Failed to create grabbing popup ... transientParent ... parent window has received input.
+
+The earlier smoke result only established that a popup was requested, not that the compositor granted its grab. It was insufficient evidence of functional left-click behavior.
+
+The replacement uses **KStatusNotifierItem::setIsMenu(true)** (introduced in KDE Frameworks 6.14). Plasma reads `ItemIsMenu=true` and presents the exported D-Bus menu for primary click as well as right-click. There is no custom activation callback, fake focus window, or app-owned `QMenu::popup()` path. KStatusNotifierItem owns its heap-allocated menu.
+
+Ubuntu 24.04 does not provide the needed KF6 development package. The user provisioned Ubuntu 26.04 as a separate container; the old container has not been deleted.
+
+### New-container validation
+
+- Configure and compilation succeeded in `tailswitch-kde-dev` without compiler warnings.
+- Initial host startup failed on an ELF copy relocation against protected `QByteArray::_empty` in host Qt. Adding `-fPIC` to the desktop library and executable/test consumers corrected this; default Ubuntu PIE alone was insufficient.
+- CTest passed **3/3**: native desktop/clipboard behavior tests, ELF copy-relocation guard, and CLI help.
+- Desktop tests use a fake tray watcher and clipboard service on a private D-Bus session. They verify actual exported `ItemIsMenu`/`Menu` properties and the menu interface, not offscreen popup visibility.
+- Host Wayland smoke check exited 0 using container-built Qt 6.10.2 code against host Qt 6.11.1 and KF6 6.28.0.
+- Live host introspection confirmed `ItemIsMenu = true`, `Menu = /MenuBar`, and the `com.canonical.dbusmenu` interface with `GetLayout`, `Event`, and `AboutToShow` methods.
+- `ldd` resolved Qt and KDE libraries from the host with no missing dependencies reported.
+- Offscreen/missing-tray check exited 2 with an actionable diagnostic.
+- Manual left/right-click behavior, positioning, keyboard focus, and clipboard regression testing are still pending. Protocol checks alone do not prove the compositor's visual behavior.
+
+Run automated tests in the matching container runtime. The old Qt 6.4 test binary failed against host Qt 6.11 due to a missing Qt Test internal symbol; the application itself does not link Qt Test.
 
 ## Remaining investigation
 
+- [ ] Get manual confirmation of native left/right-click menus, focus, scaling, clipboard, and absence of the grabbing-popup warning.
+- [ ] **Remove the old `tailswitch-dev` container after the replacement is confirmed working.** Keep it while validation is pending; see [follow-ups](TODO.md).
 - [ ] Check TailSwitch naming conflicts; check TailTray if fallback is needed.
-- [x] Select and validate a build environment that does not modify the SteamOS base system: Distrobox Ubuntu 24.04.
-- [x] Verify development dependencies and initial host runtime ABI compatibility with a minimal executable. Release packaging compatibility remains separate.
 - [ ] Inspect status schema without persisting real tailnet data; construct synthetic fixtures.
-- [ ] Verify how to read saved exit-node and LAN-access preferences as an unprivileged user. Avoid relying on an undocumented/debug interface without recording versioning and privacy risks.
-- [ ] Determine the minimum supported Tailscale version and behavior for unknown versions/fields.
-- [ ] Validate operator permission detection, existing-operator handling, setup instructions, and revocation instructions.
+- [ ] Verify an unprivileged saved-preference read mechanism; document versioning/privacy risks if a debug API is necessary.
+- [ ] Establish minimum supported Tailscale version and handling of unknown versions/fields.
+- [ ] Validate operator detection, existing-operator handling, setup, and revocation instructions.
 - [ ] Verify daemon-unavailable, logged-out, expired-auth, and permission-denied detection.
-- [ ] Build a minimal Qt tray and clipboard smoke test; verify KDE Wayland behavior, clipboard ownership, notifications, scaling, and missing-tray handling.
-- [ ] Validate CLI discovery in a desktop-launched session.
+- [ ] Validate notifications and desktop-launched CLI discovery.
 - [ ] Test suspend/resume and external CLI state reconciliation.
-- [ ] Validate home-folder installation, Qt plugin discovery, launcher, autostart, and uninstall.
-- [ ] Inventory bundled libraries and satisfy Qt/dependency redistribution requirements.
-
-## Prototype results
-
-- CMake configure and compilation succeeded in Distrobox without compiler warnings.
-- CMake reported missing optional XKB development files, but configuration/build completed. Revisit if later code or packaging needs them.
-- CTest passed (2/2): CLI help and desktop behaviors. Desktop tests cover six cases using offscreen menus and a fake clipboard service on an isolated D-Bus session; Tailscale features are not yet implemented/tested.
-- Direct host execution of the Qt Test binary failed due to a missing internal Qt Test symbol between container Qt 6.4 and host Qt 6.11. Keep automated tests in the matching container runtime. The app itself does not link Qt Test and continues to pass the host smoke check.
-- Host smoke test exited 0 using native Wayland: compiled against Qt 6.4.2, running against host Qt 6.11.1.
-- Qt reported a system tray available before and after event processing, and advertised notification support.
-- `ldd` confirmed linkage to host Qt libraries under `/usr/lib` with no missing dependencies reported.
-- Offscreen/missing-tray check exited 2 with an actionable diagnostic, without lingering invisibly.
-- User testing confirmed the initial tray appeared, but revealed that left-click did not open the menu and copying did not transfer text. These are not covered by tray-availability checks.
-- Added explicit primary-click menu activation, preserving the platform-provided right-click menu. D-Bus primary activation was accepted by the live host prototype without crashing; visual positioning still needs manual confirmation.
-- Introspection confirmed the host exports `org.kde.klipper.klipper.setClipboardContents(s)` on `org.kde.klipper` at `/klipper`. Copying now uses this asynchronous API with a 3-second timeout, rather than a potentially ineffective QClipboard write from an unfocused Wayland tray app.
-- Success feedback waits for service acknowledgement. Failures produce actionable feedback; tests never write to the real clipboard, and the app never reads clipboard/history contents.
-- Updated left/right-click behavior, actual clipboard transfer, notification delivery, and scaling require manual retesting. See [development instructions](DEVELOPMENT.md).
-- No Tailscale commands or automatic clipboard writes are part of the prototype.
+- [ ] Validate home-folder installation, library/plugin discovery, launcher, autostart, and uninstall.
+- [ ] Inventory bundled Qt/KDE libraries and satisfy redistribution requirements.
 
 ## Build environment setup
 
-The user provisioned Distrobox with Ubuntu 24.04, providing a stable toolchain and an older glibc baseline than this host. Initial host execution succeeded, but this does not establish distributability across SteamOS releases.
-
-Setup used:
+User-provisioned replacement:
 
 ```sh
-distrobox create --name tailswitch-dev --image docker.io/library/ubuntu:24.04
-distrobox enter tailswitch-dev -- sudo apt-get update
-distrobox enter tailswitch-dev -- sudo apt-get install -y build-essential cmake ninja-build qt6-base-dev qt6-base-dev-tools git pkg-config
+distrobox create --name tailswitch-kde-dev --image docker.io/library/ubuntu:26.04
+distrobox enter tailswitch-kde-dev -- sudo apt-get update
+distrobox enter tailswitch-kde-dev -- sudo apt-get install -y build-essential cmake ninja-build git pkg-config dbus-daemon qt6-base-dev qt6-base-dev-tools libkf6statusnotifieritem-dev extra-cmake-modules
 ```
 
-The project remains at `/home/deck/Developer/TailSwitch`, accessible through Distrobox's shared home directory. Package installation above happens inside the container, not on the SteamOS host. Distrobox is a development convenience, not a security sandbox.
+Build into `build/kde-dev`, not the old `build/dev` cache. See [development instructions](DEVELOPMENT.md).
 
-Next: manually validate tray appearance and clipboard transfer, then investigate read-only status/preferences and implement the tested CLI adapter. Do not disable SteamOS read-only protection or install host system packages as a shortcut.
-
-The user configured the Git author identity before the first commit. Use that identity; do not invent one or change global Git configuration.
+The project lives in the shared home directory, outside either container's writable root. Package installation happens inside the container. Distrobox is a development convenience, not a security sandbox. Do not disable SteamOS read-only protection, change global Git identity, or remove the shared project directory when retiring a container.

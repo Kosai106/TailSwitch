@@ -20,28 +20,31 @@ Quitting the app will not disconnect Tailscale. An unavailable exit node will ne
 - [Approved plan](docs/PLAN.md)
 - [Compatibility findings and remaining checks](docs/COMPATIBILITY.md)
 - [Build and manual smoke-test instructions](docs/DEVELOPMENT.md)
+- [Follow-ups, including old-container cleanup](docs/TODO.md)
 
 ## Development
 
-Stack: C++17 / Qt 6 Widgets / CMake. Build in the `tailswitch-dev` Distrobox container:
+Stack: C++17 / Qt 6 Widgets / KDE Frameworks StatusNotifierItem / CMake. Build in the `tailswitch-kde-dev` Ubuntu 26.04 Distrobox container (Qt >= 6.8, KF6StatusNotifierItem >= 6.14):
 
 ```sh
 cd /home/deck/Developer/TailSwitch
-distrobox enter tailswitch-dev -- cmake -S "$PWD" -B "$PWD/build/dev" -G Ninja -DCMAKE_BUILD_TYPE=Debug
-distrobox enter tailswitch-dev -- cmake --build "$PWD/build/dev"
-distrobox enter tailswitch-dev -- ctest --test-dir "$PWD/build/dev" --output-on-failure
+distrobox enter tailswitch-kde-dev -- cmake -S "$PWD" -B "$PWD/build/kde-dev" -G Ninja -DCMAKE_BUILD_TYPE=Debug
+distrobox enter tailswitch-kde-dev -- cmake --build "$PWD/build/kde-dev"
+distrobox enter tailswitch-kde-dev -- ctest --test-dir "$PWD/build/kde-dev" --output-on-failure
 ```
+
+The old `tailswitch-dev` container is retained until the replacement passes manual validation. Do not reuse its `build/dev` cache or executable for these checks.
 
 Run on the host:
 
 ```sh
-QT_QPA_PLATFORM=wayland ./build/dev/tailswitch --smoke-test
+QT_QPA_PLATFORM=wayland ./build/kde-dev/tailswitch --smoke-test
 # Or omit --smoke-test to explore the tray menu and manually test copying.
 ```
 
-This is a dynamically linked development build, not a portable release. Left-click opens the tray menu; right-click remains supported. Copying uses Plasma's Clipboard manager (Klipper) via D-Bus to avoid Wayland input-focus restrictions.
+This is a dynamically linked development build, not a portable release. The native tray item exports `ItemIsMenu=true` so Plasma can present the menu for both left-click and right-click, without an app-owned Wayland popup. Manual validation of this replacement is pending. Copying uses Plasma's Clipboard manager (Klipper) via D-Bus; the user confirmed this clipboard approach works.
 
-Automated coverage checks CLI help, tray activation, and clipboard success/failure using a fake service on an isolated session bus. Run these tests in Distrobox with its matching Qt Test runtime. Fake-CLI behavioral tests are planned with the actual Tailscale adapter.
+Automated coverage checks CLI help, native D-Bus tray-menu export, menu ownership, clipboard success/failure through a fake service, and absence of ELF copy relocations. Run tests in Distrobox with its matching Qt Test runtime. Fake-CLI tests are planned with the actual Tailscale adapter.
 
 Do not commit real tailnet status, device identifiers, login URLs, credentials, or raw preference dumps. Test fixtures must use synthetic data.
 
@@ -51,4 +54,4 @@ TailSwitch is a provisional name pending availability checks; TailTray is the pr
 
 ## License
 
-Our code is licensed under [MIT](LICENSE). Qt and any bundled third-party components retain their own licenses; release packaging must include the required notices and satisfy their redistribution obligations.
+Our code is licensed under [MIT](LICENSE). Qt, KDE Frameworks, and any other bundled third-party components retain their own licenses; release packaging must include the required notices and satisfy their redistribution obligations.

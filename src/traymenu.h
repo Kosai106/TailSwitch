@@ -1,7 +1,8 @@
 #pragma once
 
+class KStatusNotifierItem;
 class QMenu;
-class QSystemTrayIcon;
 
-// Keep the platform-provided context menu, and also open it on primary click.
-void configureTrayMenu(QSystemTrayIcon &tray, QMenu &menu);
+// Export a menu-only StatusNotifierItem so Plasma renders the menu for both
+// primary and secondary clicks. The item takes ownership of the heap menu.
+void configureTrayMenu(KStatusNotifierItem &tray, QMenu &menu);

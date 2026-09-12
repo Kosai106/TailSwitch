@@ -1,6 +1,7 @@
 #include "kdeclipboard.h"
 #include "traymenu.h"
 
+#include <KStatusNotifierItem>
 #include <QAction>
 #include <QApplication>
 #include <QCommandLineParser>
@@ -77,7 +78,10 @@ int main(int argc, char *argv[])
     }
 
     KdeClipboard clipboard;
-    QMenu menu;
+    KStatusNotifierItem tray(QStringLiteral("TailSwitch"));
+    // KStatusNotifierItem owns and deletes its context menu.
+    QMenu &menu = *new QMenu;
+    configureTrayMenu(tray, menu);
     menu.addAction("TailSwitch · Compatibility prototype")->setEnabled(false);
     menu.addAction("No Tailscale connection or device data loaded")->setEnabled(false);
     menu.addSeparator();
@@ -111,30 +115,29 @@ int main(int argc, char *argv[])
     QObject::connect(menu.addAction("Quit"), &QAction::triggered,
                      &app, &QApplication::quit);
 
-    QSystemTrayIcon tray(prototypeIcon());
-    tray.setToolTip("TailSwitch — compatibility prototype (no network controls)");
-    configureTrayMenu(tray, menu);
+    tray.setTitle("TailSwitch");
+    tray.setCategory(KStatusNotifierItem::Communications);
+    tray.setIconByPixmap(prototypeIcon());
+    tray.setToolTipTitle("TailSwitch — compatibility prototype (no network controls)");
     QObject::connect(&clipboard, &KdeClipboard::copyFailed, &tray,
                      [&tray, copySample, copyFeedback](const QString &message) {
         copySample->setEnabled(true);
         copyFeedback->setText("Copy failed — check Plasma's Clipboard manager");
         QTextStream(stderr) << message << Qt::endl;
-        tray.showMessage("TailSwitch — copy failed", message, QSystemTrayIcon::Warning);
+        tray.showMessage("TailSwitch — copy failed", message, "dialog-warning");
     });
-    tray.show();
+    tray.setStatus(KStatusNotifierItem::Active);
+    diagnostics << "Native menu-only tray: " << (tray.isMenu() ? "yes" : "no") << Qt::endl;
 
     if (parser.isSet(smokeTest)) {
-        QObject::connect(&menu, &QMenu::aboutToShow, &app, [&diagnostics] {
-            diagnostics << "Local tray popup opening" << Qt::endl;
-        });
         QTimer::singleShot(1500, &app, [&app, &tray, &diagnostics] {
             // Qt availability is a smoke check, not proof that the compositor
             // rendered the icon/menu correctly. That needs visual testing.
             const bool available = QSystemTrayIcon::isSystemTrayAvailable();
             diagnostics << "Tray availability after event processing: "
                         << (available ? "yes" : "no") << Qt::endl;
-            tray.hide();
-            app.exit(available ? 0 : 2);
+            tray.setStatus(KStatusNotifierItem::Passive);
+            app.exit(available && tray.isMenu() ? 0 : 2);
         });
     }
 

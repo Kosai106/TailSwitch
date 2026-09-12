@@ -1,6 +1,8 @@
+#include "kdeclipboard.h"
+#include "traymenu.h"
+
 #include <QAction>
 #include <QApplication>
-#include <QClipboard>
 #include <QCommandLineParser>
 #include <QIcon>
 #include <QMenu>
@@ -74,6 +76,7 @@ int main(int argc, char *argv[])
         return 2;
     }
 
+    KdeClipboard clipboard;
     QMenu menu;
     menu.addAction("TailSwitch · Compatibility prototype")->setEnabled(false);
     menu.addAction("No Tailscale connection or device data loaded")->setEnabled(false);
@@ -83,11 +86,18 @@ int main(int argc, char *argv[])
     auto *copySample = devices->addAction("Copy sample IPv4 · 100.64.0.1");
     auto *copyFeedback = menu.addAction("Clipboard test: not run");
     copyFeedback->setEnabled(false);
-    QObject::connect(copySample, &QAction::triggered, &app, [copyFeedback] {
-        // Only an explicit user action writes to the clipboard. Paste into a
-        // separate app to verify transfer/ownership under Wayland.
-        QApplication::clipboard()->setText("100.64.0.1", QClipboard::Clipboard);
-        copyFeedback->setText("Sample IP sent to clipboard — paste to verify");
+    QObject::connect(copySample, &QAction::triggered, &app,
+                     [&clipboard, copySample, copyFeedback] {
+        // Only an explicit user action writes. Disable repeat requests until
+        // Klipper acknowledges the operation or the bounded D-Bus call fails.
+        copySample->setEnabled(false);
+        copyFeedback->setText("Copying sample IP…");
+        clipboard.copyText("100.64.0.1");
+    });
+    QObject::connect(&clipboard, &KdeClipboard::copySucceeded, &app,
+                     [copySample, copyFeedback] {
+        copySample->setEnabled(true);
+        copyFeedback->setText("Sample IP copied via KDE Clipboard");
     });
     menu.addSeparator();
     auto *about = menu.addAction("About this prototype…");
@@ -103,10 +113,20 @@ int main(int argc, char *argv[])
 
     QSystemTrayIcon tray(prototypeIcon());
     tray.setToolTip("TailSwitch — compatibility prototype (no network controls)");
-    tray.setContextMenu(&menu);
+    configureTrayMenu(tray, menu);
+    QObject::connect(&clipboard, &KdeClipboard::copyFailed, &tray,
+                     [&tray, copySample, copyFeedback](const QString &message) {
+        copySample->setEnabled(true);
+        copyFeedback->setText("Copy failed — check Plasma's Clipboard manager");
+        QTextStream(stderr) << message << Qt::endl;
+        tray.showMessage("TailSwitch — copy failed", message, QSystemTrayIcon::Warning);
+    });
     tray.show();
 
     if (parser.isSet(smokeTest)) {
+        QObject::connect(&menu, &QMenu::aboutToShow, &app, [&diagnostics] {
+            diagnostics << "Local tray popup opening" << Qt::endl;
+        });
         QTimer::singleShot(1500, &app, [&app, &tray, &diagnostics] {
             // Qt availability is a smoke check, not proof that the compositor
             // rendered the icon/menu correctly. That needs visual testing.

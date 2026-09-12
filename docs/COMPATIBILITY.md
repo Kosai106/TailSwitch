@@ -51,12 +51,17 @@ No mutating Tailscale command has been run. Actual daemon access, operator autho
 
 - CMake configure and compilation succeeded in Distrobox without compiler warnings.
 - CMake reported missing optional XKB development files, but configuration/build completed. Revisit if later code or packaging needs them.
-- CTest CLI-help check passed (1/1); this is not behavioral coverage of Tailscale features.
+- CTest passed (2/2): CLI help and desktop behaviors. Desktop tests cover six cases using offscreen menus and a fake clipboard service on an isolated D-Bus session; Tailscale features are not yet implemented/tested.
+- Direct host execution of the Qt Test binary failed due to a missing internal Qt Test symbol between container Qt 6.4 and host Qt 6.11. Keep automated tests in the matching container runtime. The app itself does not link Qt Test and continues to pass the host smoke check.
 - Host smoke test exited 0 using native Wayland: compiled against Qt 6.4.2, running against host Qt 6.11.1.
 - Qt reported a system tray available before and after event processing, and advertised notification support.
 - `ldd` confirmed linkage to host Qt libraries under `/usr/lib` with no missing dependencies reported.
 - Offscreen/missing-tray check exited 2 with an actionable diagnostic, without lingering invisibly.
-- Actual visual tray/menu appearance, clipboard transfer, notification delivery, and scaling remain manual checks. See [development instructions](DEVELOPMENT.md).
+- User testing confirmed the initial tray appeared, but revealed that left-click did not open the menu and copying did not transfer text. These are not covered by tray-availability checks.
+- Added explicit primary-click menu activation, preserving the platform-provided right-click menu. D-Bus primary activation was accepted by the live host prototype without crashing; visual positioning still needs manual confirmation.
+- Introspection confirmed the host exports `org.kde.klipper.klipper.setClipboardContents(s)` on `org.kde.klipper` at `/klipper`. Copying now uses this asynchronous API with a 3-second timeout, rather than a potentially ineffective QClipboard write from an unfocused Wayland tray app.
+- Success feedback waits for service acknowledgement. Failures produce actionable feedback; tests never write to the real clipboard, and the app never reads clipboard/history contents.
+- Updated left/right-click behavior, actual clipboard transfer, notification delivery, and scaling require manual retesting. See [development instructions](DEVELOPMENT.md).
 - No Tailscale commands or automatic clipboard writes are part of the prototype.
 
 ## Build environment setup

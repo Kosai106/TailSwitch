@@ -39,7 +39,9 @@ QT_QPA_PLATFORM=wayland ./build/dev/tailswitch --smoke-test
 # Or omit --smoke-test to explore the tray menu and manually test copying.
 ```
 
-This is a dynamically linked development build, not a portable release. Automated coverage currently checks CLI help only; Qt Test and fake-CLI behavioral tests are planned with the actual Tailscale adapter.
+This is a dynamically linked development build, not a portable release. Left-click opens the tray menu; right-click remains supported. Copying uses Plasma's Clipboard manager (Klipper) via D-Bus to avoid Wayland input-focus restrictions.
+
+Automated coverage checks CLI help, tray activation, and clipboard success/failure using a fake service on an isolated session bus. Run these tests in Distrobox with its matching Qt Test runtime. Fake-CLI behavioral tests are planned with the actual Tailscale adapter.
 
 Do not commit real tailnet status, device identifiers, login URLs, credentials, or raw preference dumps. Test fixtures must use synthetic data.
 

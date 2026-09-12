@@ -86,9 +86,9 @@ Run automated tests in the matching container runtime. The old Qt 6.4 test binar
 ## Icon and attention-state polish
 
 - The original generated blue/green/gray/amber line-and-node icon was replaced with the user-supplied Tailscale nine-dot SVG.
-- The SVG's original `0 0 130 120` canvas placed approximately 53×53 units of artwork near its center. Its viewBox is now a square `37 32 57.04 57.04`, leaving roughly two source units around the artwork to avoid anti-aliasing clipping.
+- The SVG's original `0 0 130 120` canvas placed approximately 53×53 units of artwork near its center. Its viewBox is now a square `35 30 61.04 61.04`, leaving roughly four source units around the artwork for a balanced tray margin and anti-aliasing safety.
 - The asset is embedded as a Qt resource, so runtime does not depend on the source SVG being installed beside the executable. The solid/translucent alpha pattern is retained and tinted to `QPalette::WindowText` at startup for light/dark application-theme legibility.
-- A desktop test confirms the embedded icon renders and occupies at least 56×56 pixels of a 64×64 canvas, with a small nonzero margin. Host Wayland smoke startup continues to pass.
+- A desktop test confirms the embedded icon renders and occupies at least 53×53 pixels of a 64×64 canvas, with at least three rendered pixels of margin. Host Wayland smoke startup continues to pass.
 - The yellow pulse was KDE rendering `NeedsAttention`, previously set for any nonempty Tailscale health list. Routine health messages now remain visible in the menu header and Status details while the notifier stays `Active`. `NeedsAttention` is reserved for login, machine approval, another-user state, or inability to read status; its attention icon uses the same logo rather than separate yellow artwork.
 - The logo is a Tailscale trademark and is explicitly excluded from the project's MIT grant in [the asset notice](../assets/README.md). Verify current brand/trademark requirements before public release.
 

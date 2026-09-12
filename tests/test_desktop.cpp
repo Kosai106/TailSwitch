@@ -112,13 +112,13 @@ private slots:
         }
         QVERIFY(!opaqueBounds.isEmpty());
         // The original 130x120 canvas rendered the 53-unit mark at roughly
-        // half this width. Keep only a small anti-aliasing-safe margin.
-        QVERIFY(opaqueBounds.width() >= 56);
-        QVERIFY(opaqueBounds.height() >= 56);
-        QVERIFY(opaqueBounds.left() >= 1);
-        QVERIFY(opaqueBounds.top() >= 1);
-        QVERIFY(opaqueBounds.right() <= 62);
-        QVERIFY(opaqueBounds.bottom() <= 62);
+        // half this width. Keep a deliberate but compact tray-safe margin.
+        QVERIFY(opaqueBounds.width() >= 53);
+        QVERIFY(opaqueBounds.height() >= 53);
+        QVERIFY(opaqueBounds.left() >= 3);
+        QVERIFY(opaqueBounds.top() >= 3);
+        QVERIFY(opaqueBounds.right() <= 60);
+        QVERIFY(opaqueBounds.bottom() <= 60);
     }
 
     void nativeMenuIsExported()

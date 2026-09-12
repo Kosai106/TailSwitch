@@ -1,145 +1,91 @@
 #include "kdeclipboard.h"
-#include "traymenu.h"
+#include "readonlytray.h"
+#include "tailscaleclient.h"
 
 #include <KStatusNotifierItem>
-#include <QAction>
 #include <QApplication>
 #include <QCommandLineParser>
-#include <QIcon>
-#include <QMenu>
-#include <QMessageBox>
-#include <QPainter>
-#include <QPixmap>
 #include <QSystemTrayIcon>
 #include <QTextStream>
 #include <QTimer>
 
 #include <cstdio>
 
-namespace {
-
-QIcon prototypeIcon()
-{
-    // Neutral prototype artwork; no external assets or Tailscale branding.
-    QIcon icon;
-    for (const int size : {22, 32, 48, 64, 128}) {
-        QPixmap pixmap(size, size);
-        pixmap.fill(Qt::transparent);
-        QPainter painter(&pixmap);
-        painter.setRenderHint(QPainter::Antialiasing);
-        painter.scale(size / 32.0, size / 32.0);
-        painter.setPen(QPen(QColor("#60a5fa"), 2.5));
-        painter.drawLine(QPointF(8, 9), QPointF(24, 16));
-        painter.drawLine(QPointF(8, 23), QPointF(24, 16));
-        painter.setPen(Qt::NoPen);
-        painter.setBrush(QColor("#60a5fa"));
-        for (const auto point : {QPointF(8, 9), QPointF(8, 23), QPointF(24, 16)}) {
-            painter.drawEllipse(point, 4, 4);
-        }
-        painter.end();
-        icon.addPixmap(pixmap);
-    }
-    return icon;
-}
-
-} // namespace
-
 int main(int argc, char *argv[])
 {
     QApplication app(argc, argv);
     QApplication::setApplicationName("TailSwitch");
-    QApplication::setApplicationVersion("0.1.0-prototype");
+    QApplication::setApplicationVersion("0.1.0-readonly");
     QApplication::setQuitOnLastWindowClosed(false);
 
     QCommandLineParser parser;
     parser.setApplicationDescription(
-        "Unofficial Tailscale tray compatibility prototype. No network controls yet.");
+        "Unofficial, read-only Tailscale tray client. No network controls yet.");
     parser.addHelpOption();
     parser.addVersionOption();
     const QCommandLineOption smokeTest(
-        "smoke-test", "Report Qt/tray capabilities, briefly show the icon, then exit. "
+        "smoke-test", "Briefly show the native tray, report capabilities, then exit. "
                       "Does not access Tailscale or change the clipboard.");
-    parser.addOption(smokeTest);
+    const QCommandLineOption checkStatus(
+        "check-status", "Read status once and print only state/counts, without a tray. "
+                        "Never prints device names, addresses, health text, or authentication URLs.");
+    const QCommandLineOption executablePath(
+        "tailscale-path", "Use an explicit absolute path to the Tailscale CLI.", "path");
+    parser.addOptions({smokeTest, checkStatus, executablePath});
     parser.process(app);
+    if (!parser.positionalArguments().isEmpty()
+        || (parser.isSet(smokeTest) && parser.isSet(checkStatus))) {
+        QTextStream(stderr) << "Use either --smoke-test or --check-status, without positional arguments."
+                            << Qt::endl;
+        return 1;
+    }
+
+    TailscaleClientOptions options;
+    options.executable = parser.value(executablePath);
+    TailscaleClient client(options);
+    // Explicit stdout avoids host Qt logging routing diagnostics to journald.
+    QTextStream diagnostics(stdout);
+    if (parser.isSet(checkStatus)) {
+        QObject::connect(&client, &TailscaleClient::statusReceived, &app,
+                         [&app, &diagnostics](const TailscaleStatus &status) {
+            diagnostics << "State: " << connectionLabel(status.state) << Qt::endl;
+            diagnostics << "Peer count: " << status.peers.size() << Qt::endl;
+            diagnostics << "Local IPv4 available: " << (!status.self.ipv4.isEmpty() ? "yes" : "no") << Qt::endl;
+            diagnostics << "Health message count: " << status.health.size() << Qt::endl;
+            app.exit(0);
+        });
+        QObject::connect(&client, &TailscaleClient::failed, &app,
+                         [&app](const StatusFailure &failure) {
+            QTextStream(stderr) << failure.message << Qt::endl;
+            app.exit(1);
+        });
+        QTimer::singleShot(0, &client, &TailscaleClient::refresh);
+        return app.exec();
+    }
 
     const bool trayAvailable = QSystemTrayIcon::isSystemTrayAvailable();
-    // Use stdout explicitly: the host's Qt logging can route qInfo to journald.
-    QTextStream diagnostics(stdout);
     diagnostics << "Qt build: " << QT_VERSION_STR << " runtime: " << qVersion() << Qt::endl;
     diagnostics << "Platform: " << QGuiApplication::platformName() << Qt::endl;
     diagnostics << "System tray available: " << (trayAvailable ? "yes" : "no") << Qt::endl;
-    diagnostics << "Tray reports notification support: "
-                << (QSystemTrayIcon::supportsMessages() ? "yes" : "no") << Qt::endl;
-
     if (!trayAvailable) {
-        QTextStream(stderr) << "No system tray is available. Run in KDE Plasma Desktop Mode."
-                            << Qt::endl;
+        QTextStream(stderr) << "No system tray is available. Run in KDE Plasma Desktop Mode." << Qt::endl;
         return 2;
     }
 
     KdeClipboard clipboard;
     KStatusNotifierItem tray(QStringLiteral("TailSwitch"));
-    // KStatusNotifierItem owns and deletes its context menu.
-    QMenu &menu = *new QMenu;
-    configureTrayMenu(tray, menu);
-    menu.addAction("TailSwitch · Compatibility prototype")->setEnabled(false);
-    menu.addAction("No Tailscale connection or device data loaded")->setEnabled(false);
-    menu.addSeparator();
-
-    auto *devices = menu.addMenu("Sample devices (synthetic)");
-    auto *copySample = devices->addAction("Copy sample IPv4 · 100.64.0.1");
-    auto *copyFeedback = menu.addAction("Clipboard test: not run");
-    copyFeedback->setEnabled(false);
-    QObject::connect(copySample, &QAction::triggered, &app,
-                     [&clipboard, copySample, copyFeedback] {
-        // Only an explicit user action writes. Disable repeat requests until
-        // Klipper acknowledges the operation or the bounded D-Bus call fails.
-        copySample->setEnabled(false);
-        copyFeedback->setText("Copying sample IP…");
-        clipboard.copyText("100.64.0.1");
-    });
-    QObject::connect(&clipboard, &KdeClipboard::copySucceeded, &app,
-                     [copySample, copyFeedback] {
-        copySample->setEnabled(true);
-        copyFeedback->setText("Sample IP copied via KDE Clipboard");
-    });
-    menu.addSeparator();
-    auto *about = menu.addAction("About this prototype…");
-    QObject::connect(about, &QAction::triggered, &app, [] {
-        QMessageBox::about(nullptr, "About TailSwitch",
-            "TailSwitch compatibility prototype\n\n"
-            "An unofficial client, not affiliated with or endorsed by Tailscale.\n"
-            "This prototype only tests the system tray and user-triggered clipboard copying.\n"
-            "It does not read or change Tailscale settings.");
-    });
-    QObject::connect(menu.addAction("Quit"), &QAction::triggered,
-                     &app, &QApplication::quit);
-
-    tray.setTitle("TailSwitch");
-    tray.setCategory(KStatusNotifierItem::Communications);
-    tray.setIconByPixmap(prototypeIcon());
-    tray.setToolTipTitle("TailSwitch — compatibility prototype (no network controls)");
-    QObject::connect(&clipboard, &KdeClipboard::copyFailed, &tray,
-                     [&tray, copySample, copyFeedback](const QString &message) {
-        copySample->setEnabled(true);
-        copyFeedback->setText("Copy failed — check Plasma's Clipboard manager");
-        QTextStream(stderr) << message << Qt::endl;
-        tray.showMessage("TailSwitch — copy failed", message, "dialog-warning");
-    });
-    tray.setStatus(KStatusNotifierItem::Active);
+    ReadOnlyTray controller(tray, client, clipboard);
     diagnostics << "Native menu-only tray: " << (tray.isMenu() ? "yes" : "no") << Qt::endl;
-
     if (parser.isSet(smokeTest)) {
         QTimer::singleShot(1500, &app, [&app, &tray, &diagnostics] {
-            // Qt availability is a smoke check, not proof that the compositor
-            // rendered the icon/menu correctly. That needs visual testing.
             const bool available = QSystemTrayIcon::isSystemTrayAvailable();
             diagnostics << "Tray availability after event processing: "
                         << (available ? "yes" : "no") << Qt::endl;
             tray.setStatus(KStatusNotifierItem::Passive);
             app.exit(available && tray.isMenu() ? 0 : 2);
         });
+    } else {
+        QTimer::singleShot(0, &client, &TailscaleClient::start);
     }
-
     return app.exec();
 }

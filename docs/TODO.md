@@ -9,7 +9,17 @@
 
 The shared project directory, new executable, unrelated containers, and container images were not removed. The old ignored `build/dev` artifacts remain; use `build/kde-dev` for all current builds and launches.
 
+## Read-only milestone
+
+- [x] Inspect local status schema and preference-read availability without saving real tailnet dumps.
+- [x] Implement an asynchronous, bounded, tested status CLI adapter and typed status parser.
+- [x] Display real connection status, local IPv4, and sorted peers with copying and quiet feedback.
+- [x] Add periodic/manual refresh, actionable failures, health details, stale-action handling, and repeated-error suppression.
+- [x] Validate the live host with the sanitized `--check-status` command; native tray smoke check passes.
+- [ ] Get user confirmation of real peer display, offline-IP copying, health details, and menu stability across refreshes.
+
 ## Next development step
 
-- [ ] Investigate read-only Tailscale status/preferences and implement a tested CLI adapter for connection status and device listing.
+- [ ] Design targeted connect/disconnect and exit-node mutations, with verified saved-preference reads and operator permission handling.
+- [ ] Request permission before disruptive real-network integration tests. Keep fake-CLI tests as the default.
 - [ ] Continue the remaining compatibility and release checks in [COMPATIBILITY.md](COMPATIBILITY.md).

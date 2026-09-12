@@ -1,0 +1,8 @@
+{
+  "Version": "1.102.3-synthetic",
+  "BackendState": "Stopped",
+  "Self": null,
+  "TailscaleIPs": ["100.64.0.1"],
+  "Peer": null,
+  "Health": null
+}

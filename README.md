@@ -1,8 +1,16 @@
 # TailSwitch
 
-A planned lightweight, unofficial Tailscale system-tray app for KDE Plasma on Steam Deck, built with C++ and Qt 6 Widgets.
+A lightweight, unofficial Tailscale system-tray app for KDE Plasma on Steam Deck, built with C++ and Qt 6 Widgets.
 
-**Status:** compatibility prototype builds and runs in the Steam Deck's KDE Wayland session. It provides a tray menu and manual copying of a synthetic IP; real Tailscale integration is not implemented yet.
+**Status:** working read-only preview for the Steam Deck's KDE Wayland session. Displays real Tailscale connection state, this device's IPv4, and sorted peers with click-to-copy. Refreshes every 10 seconds and reports errors/health warnings. Connection and exit-node controls are not implemented yet.
+
+## Available now
+
+- Native Plasma menus on both left-click and right-click.
+- Real connection state, with login/approval/initializing/disconnected states distinguished.
+- This device and peers: click to copy IPv4 through KDE Clipboard. Offline peers remain copyable; IPv6-only entries are disabled.
+- Automatic refresh, **Refresh now**, and **Status details** with locally displayed Tailscale health messages.
+- Bounded asynchronous CLI reads, failure recovery, and no repeated notifications for an unchanged error.
 
 ## Planned v1
 
@@ -39,12 +47,20 @@ Run on the host:
 
 ```sh
 QT_QPA_PLATFORM=wayland ./build/kde-dev/tailswitch --smoke-test
-# Or omit --smoke-test to explore the tray menu and manually test copying.
+# Omit --smoke-test to read live Tailscale status and use the tray menu.
 ```
 
 This is a dynamically linked development build, not a portable release. The native tray item exports `ItemIsMenu=true` so Plasma can present the menu for both left-click and right-click, without an app-owned Wayland popup. The user confirmed the native tray replacement works. Copying uses Plasma's Clipboard manager (Klipper) via D-Bus; the user confirmed this clipboard approach works.
 
-Automated coverage checks CLI help, native D-Bus tray-menu export, menu ownership, clipboard success/failure through a fake service, and absence of ELF copy relocations. Run tests in Distrobox with its matching Qt Test runtime. Fake-CLI tests are planned with the actual Tailscale adapter.
+For a one-shot read that prints only state/counts (no tray or clipboard access):
+
+```sh
+QT_QPA_PLATFORM=offscreen ./build/kde-dev/tailswitch --check-status
+```
+
+CLI discovery uses PATH plus common paths, including `/opt/tailscale/tailscale`. Override it with `--tailscale-path /absolute/path/to/tailscale` if needed. The app only invokes `tailscale status --json`; it never starts login or changes preferences.
+
+Automated coverage includes synthetic status fixtures, a fake CLI, timeout/crash/output-limit/error/recovery tests, periodic refresh, native D-Bus menu export, live menu reconciliation and clipboard behavior through fake services, sanitized status-check output, and ELF copy-relocation checks. Run tests in Distrobox with its matching Qt Test runtime.
 
 Do not commit real tailnet status, device identifiers, login URLs, credentials, or raw preference dumps. Test fixtures must use synthetic data.
 

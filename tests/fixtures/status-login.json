@@ -1,0 +1,8 @@
+{
+  "BackendState": "NeedsLogin",
+  "AuthURL": "https://example.invalid/login/synthetic-secret",
+  "Self": null,
+  "Peer": null,
+  "TailscaleIPs": null,
+  "Health": []
+}

@@ -1,0 +1,41 @@
+{
+  "Version": "1.102.3-synthetic",
+  "BackendState": "Running",
+  "TailscaleIPs": ["100.64.0.1", "fd7a:115c:a1e0::1"],
+  "Self": {
+    "ID": "synthetic-self",
+    "HostName": "synthetic-deck",
+    "DNSName": "synthetic-deck.example.ts.net.",
+    "TailscaleIPs": ["100.64.0.1", "fd7a:115c:a1e0::1"],
+    "Online": true
+  },
+  "Peer": {
+    "synthetic-zulu": {
+      "HostName": "Zulu",
+      "TailscaleIPs": ["fd7a:115c:a1e0::2", "100.64.0.2"],
+      "Online": true,
+      "FutureField": {"ignored": true}
+    },
+    "synthetic-alpha": {
+      "HostName": "alpha & dev",
+      "TailscaleIPs": ["100.64.0.3"],
+      "Online": true
+    },
+    "synthetic-offline": {
+      "HostName": "aardvark",
+      "TailscaleIPs": ["100.64.0.4"],
+      "Online": false
+    },
+    "synthetic-v6-only": {
+      "HostName": "",
+      "DNSName": "ipv6-only.example.ts.net.",
+      "TailscaleIPs": ["fd7a:115c:a1e0::4"],
+      "CurAddr": "203.0.113.7:41641",
+      "AllowedIPs": ["192.0.2.0/24"],
+      "Online": false
+    },
+    "synthetic-unknown": {"TailscaleIPs": null}
+  },
+  "Health": ["Synthetic DNS warning"],
+  "FutureStatusField": {"ignored": true}
+}

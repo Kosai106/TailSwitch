@@ -21,11 +21,13 @@ Do not reuse `build/dev`: it contains the old Ubuntu 24.04 CMake cache and execu
 
 CTest runs:
 
-- **desktop_behaviors:** six Qt Test cases for native tray menu export, ownership/no app-owned popup, acknowledged clipboard writes, rejected writes, missing service, and empty text.
+- **tailscale_status_and_client:** synthetic JSON parsing, known backend states, invalid structures, online-first sorting, IPv4 selection, absent fields, fragmented output, error classification, crashes/timeouts/output limits, executable discovery, paths with spaces, request coalescing, recovery, and periodic refresh through a fake CLI.
+- **desktop_behaviors:** native tray-menu export/ownership, fake clipboard acknowledgement/failure, live device-menu reconciliation, offline copying, missing-IPv4 disabling, stale-action invalidation, and repeated-error notification suppression.
 - **no_copy_relocations:** inspect the executable's ELF relocations to prevent a known SteamOS Qt loader failure.
+- **check_status_summary:** run the full app's one-shot checker against the fake CLI and reject fixture names, IPs, health text, or authentication markers in its output.
 - **cli_help:** verify command-line help without a desktop session.
 
-Desktop tests use a fake StatusNotifierWatcher and fake Klipper under a private `dbus-run-session`, never the real tray/clipboard. The tray test reads the actual exported `ItemIsMenu` and `Menu` properties and checks the D-Bus menu interface. Merely observing `QMenu::aboutToShow` or offscreen visibility cannot prove Wayland accepted a popup grab, so those are no longer used as success criteria.
+All fixtures are synthetic. The fake CLI refuses any arguments except `status --json`; it never calls real Tailscale. Desktop tests use fake StatusNotifierWatcher, Klipper, and notification services under a private `dbus-run-session`, never the real tray/clipboard/notifications. The tray test reads the actual exported `ItemIsMenu` and `Menu` properties and checks the D-Bus menu interface. Merely observing `QMenu::aboutToShow` or offscreen visibility cannot prove Wayland accepted a popup grab, so those are no longer used as success criteria.
 
 Run automated tests inside Distrobox against its matching Qt Test version. The earlier Qt 6.4 test executable failed against host Qt 6.11 due to a missing Qt Test internal symbol; the application does not link Qt Test.
 
@@ -37,32 +39,57 @@ Run on the **host**, not inside Distrobox, to check SteamOS's runtime libraries:
 QT_QPA_PLATFORM=wayland ./build/kde-dev/tailswitch --smoke-test
 ```
 
-This reports compile/runtime Qt versions, platform, tray availability, advertised notification support, and native menu-only configuration. It briefly shows the icon and exits after approximately 1.5 seconds. It does not access Tailscale or change the clipboard. Exit code 2 means a required tray capability was unavailable. A successful exit does not prove visual rendering or clipboard transfer.
+This reports compile/runtime Qt versions, platform, tray availability, and native menu-only configuration. It briefly shows the icon and exits after approximately 1.5 seconds. It does not access Tailscale or change the clipboard. Exit code 2 means a required tray capability was unavailable. A successful exit does not prove visual rendering or clipboard transfer.
 
 The host D-Bus contract can also be inspected while the app runs: `/StatusNotifierItem` must export `org.kde.StatusNotifierItem.ItemIsMenu = true`, and its `Menu` property must reference a valid `com.canonical.dbusmenu` object. On the verified host, that object is `/MenuBar`. The item can use a separate unique bus connection from the app's main connection; do not assume a fixed well-known service name. Use `busctl --user list` to find the app's connections and introspect them.
 
 Do **not** simulate primary activation by calling `Activate` and expect a local popup: menu-only items tell Plasma to present the exported menu instead.
 
-## Manual tray and clipboard check
+## Read-only CLI check
 
-Quit any old instance first, then run the **new path**:
+```sh
+QT_QPA_PLATFORM=offscreen ./build/kde-dev/tailswitch --check-status
+# If the installed CLI is not found automatically:
+QT_QPA_PLATFORM=offscreen ./build/kde-dev/tailswitch --check-status --tailscale-path /opt/tailscale/tailscale
+```
+
+This reads `tailscale status --json` once, printing only connection state, peer count, local-IPv4 availability, and health-message count. Exit 0 means a supported status was read, not necessarily that networking is connected. Failure prints a generic actionable message and exits 1. Device names/addresses, raw errors, health text, and authentication URLs are not printed.
+
+Normal mode locates the CLI using PATH plus `/opt/tailscale/tailscale`, `/usr/local/bin/tailscale`, and `/usr/bin/tailscale`. An explicit path must be absolute and executable; a bad override is not silently ignored. The adapter uses no shell, normalizes CLI error language with `LC_ALL=C`, and does not execute `up`, `down`, `set`, login, or debug-preference commands.
+
+## Manual live tray and clipboard check
+
+Quit any old instance first, then run:
 
 ```sh
 QT_QPA_PLATFORM=wayland ./build/kde-dev/tailswitch
 ```
 
-1. Find the blue connected-dots icon in the tray (possibly in Plasma's hidden-icons area).
-2. Left-click to open the menu. Verify placement, focus, keyboard navigation, and legibility at your normal display scaling. There should be no Wayland grabbing-popup warning.
-3. Dismiss it, then right-click; both paths should present Plasma's exported menu, not an app-owned popup.
-4. Open **Sample devices (synthetic)** and choose **Copy sample IPv4**. This explicitly replaces clipboard text with `100.64.0.1`; it is not a real peer address.
-5. Paste into a text editor and verify the value. Reopen the menu to see quiet copy feedback. Repeat from both left-click and right-click menus.
-6. Try **About**, close the dialog, and confirm the tray app stays running.
-7. Choose **Quit** and confirm the icon disappears. Optionally test whether Plasma retains the copied value after exit.
-8. Record any regressions in the [follow-ups](TODO.md). Initial user validation and old-container cleanup are complete.
+1. Find the connected-dots tray icon. It starts blue while reading, then reflects reported connection/attention state; green means connected, gray disconnected, and amber attention needed.
+2. Left-click and right-click the icon separately. Both should open Plasma's menu without a Wayland grabbing-popup warning.
+3. Confirm **This device** and **Devices** show the expected Tailscale IPv4 addresses. Online peers sort first; offline peers remain visible and copyable. Peers with no IPv4 are disabled, rather than copying an endpoint, route, IPv6, or empty text.
+4. Click a device to replace your clipboard text with its IPv4, then paste into a text editor. Check quiet success feedback. Repeat from both click paths and, when available, with an offline peer.
+5. Keep the device submenu open across the 10-second refresh interval. Unchanged actions should retain their identity rather than being cleared/rebuilt. Check **Refresh now** too.
+6. Open **Status details**. It shows guidance for the reported backend state, last successful read time, CLI version, and health messages as local plain text. Connected status is not an end-to-end connectivity diagnosis.
+7. Check **About**, then **Quit**. Closing dialogs must not exit the app; quitting must not disconnect Tailscale.
+8. Record regressions in [follow-ups](TODO.md). Initial native-menu validation and old-container cleanup are complete; the real-peer workflow needs confirmation.
+
+Do not disconnect Tailscale, stop its daemon, or alter operator permissions just to test failure handling without explicit approval. Use the fake CLI for those tests.
+
+For a synthetic UI preview without querying your tailnet:
+
+```sh
+TAILSWITCH_FAKE_SCENARIO=success QT_QPA_PLATFORM=wayland \
+  ./build/kde-dev/tailswitch --tailscale-path "$PWD/build/kde-dev/fake_tailscale"
+```
+
+The fake executable is a developer-test artifact backed by `tests/fixtures`. Its IPs are synthetic; clicking still explicitly changes your real clipboard.
 
 Copying uses KDE's Klipper session-bus API. Plasma's Clipboard manager must be running. The action is disabled while its bounded request is pending; service acknowledgement shows quiet success. Failure/timeout re-enables the action, marks failure in the menu, and requests an error notification. The app does not read clipboard contents/history or fall back to an ineffective unfocused clipboard write.
 
-All device data is synthetic. Notifications, autostart, suspend/resume, real Tailscale access, and distributable packaging remain unvalidated.
+In normal mode, device data is real and held in memory only. Status polls run every 10 seconds, with no overlapping requests, a 5-second timeout, and an 8 MiB combined retained-output cap. Failed reads invalidate copy actions until recovery; identical consecutive failures produce only one requested notification. Health messages are visible in Status details, not logged or automatically copied.
+
+Connection/exit-node controls, autostart, explicit suspend/resume integration, real failure-notification delivery, and distributable packaging remain unimplemented or unvalidated. Periodic polling resumes with the event loop, but immediate resume handling still needs work.
 
 For missing-tray handling, `QT_QPA_PLATFORM=offscreen ./build/kde-dev/tailswitch --smoke-test` should report no tray and exit 2, rather than linger invisibly.
 

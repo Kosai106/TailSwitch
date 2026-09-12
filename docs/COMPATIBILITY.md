@@ -31,7 +31,9 @@ CMake requires Qt >= 6.8 and KF6StatusNotifierItem >= 6.14, subject to framework
 - `tailscale up` without flags reconnects without changing settings. Do not use preference-setting flags or `--reset` for reconnect.
 - `up` can initiate authentication; gate reconnect on existing authentication and handle login-required transitions without a v1 sign-in workflow.
 
-No mutating Tailscale commands have been run. Daemon access, operator authorization, real status JSON, and saved preferences remain uninspected.
+No mutating Tailscale commands have been run. Read-only `status --json` and `debug prefs` succeeded without elevation on this Deck. Inspection emitted only field names/types, backend state/counts, and selected preference booleans/configured-presence indicators; real names, addresses, authentication URLs, and preference dumps were not saved or printed.
+
+The operator preference is configured, but read access and a nonempty preference do not establish that this user has mutation rights. Verify those before implementing controls. `debug prefs` is explicitly an unstable interface; its selected exit-node/LAN-access fields are available here, but the running app does not use this command yet.
 
 ## Desktop findings and corrections
 
@@ -69,18 +71,31 @@ Ubuntu 24.04 does not provide the needed KF6 development package. The user provi
 
 Run automated tests in the matching container runtime. The old Qt 6.4 test binary failed against host Qt 6.11 due to a missing Qt Test internal symbol; the application itself does not link Qt Test.
 
+## Read-only milestone validation
+
+- The running app executes only `tailscale status --json`, with QProcess executable/argument separation and no shell. Discovery supports PATH and SteamOS's `/opt/tailscale/tailscale`, plus an explicit absolute-path override.
+- Status refreshes every 10 seconds, supports manual refresh, and never overlaps child queries. Reads have a 5-second timeout and an 8 MiB combined retained-output limit. Quitting only terminates an outstanding read process, not tailscaled.
+- The parser handles the observed schema, known backend states, null/missing optional fields, unknown extra fields, IPv6-first lists, and deterministic online-first peer ordering. It rejects malformed required structures and unknown backend states rather than inventing state. Actual compatibility has been verified with Tailscale 1.102.3; a broader version matrix remains untested.
+- Valid non-running JSON can be accepted with a nonzero CLI exit code. Crashes, nonzero running results, missing/broken executables, timeouts, excessive output, permission failures, and daemon errors are not presented as success.
+- Device actions retain identity between unchanged refreshes. Removed/stale actions are disabled and cleared; failed reads invalidate device copying until recovery. Offline peers with IPv4 remain copyable; IPv6-only peers do not copy endpoint or route addresses.
+- Health messages are displayed only in a local plain-text details dialog. Raw status/error output, peer identifiers, authentication URLs, and clipboard contents are never logged. `--check-status` prints only state/counts.
+- CTest passed **5/5** entries, including synthetic parser/fake-CLI cases, UI/clipboard/notification tests on an isolated D-Bus session, output redaction, and the native-tray/ELF regressions.
+- Live host `--check-status` successfully parsed the actual connected backend and peers. Host tray smoke check also passed. No real clipboard writes or networking mutations were performed by automated checks.
+- Manual display/copying of real peers and long-running refresh behavior still need user confirmation. Explicit suspend/resume reconciliation and broader accessibility/scaling checks remain future work.
+
 ## Remaining investigation
 
 - [x] Get user confirmation that native left/right-click menus and clipboard work.
 - [x] Remove the old `tailswitch-dev` container after successful validation; verified the replacement and shared project remain intact. See [follow-ups](TODO.md).
 - [ ] Complete keyboard-navigation and scaling coverage for release.
 - [ ] Check TailSwitch naming conflicts; check TailTray if fallback is needed.
-- [ ] Inspect status schema without persisting real tailnet data; construct synthetic fixtures.
-- [ ] Verify an unprivileged saved-preference read mechanism; document versioning/privacy risks if a debug API is necessary.
+- [x] Inspect status schema without persisting real tailnet data; construct synthetic fixtures.
+- [ ] Validate the real-device menu and copy workflow with the user.
+- [ ] Finalize saved-preference reads for controls. Unprivileged `debug prefs` works locally, but its unstable API/versioning/privacy implications need explicit handling.
 - [ ] Establish minimum supported Tailscale version and handling of unknown versions/fields.
 - [ ] Validate operator detection, existing-operator handling, setup, and revocation instructions.
-- [ ] Verify daemon-unavailable, logged-out, expired-auth, and permission-denied detection.
-- [ ] Validate notifications and desktop-launched CLI discovery.
+- [x] Test daemon-unavailable, login-required, and permission-denied handling with a fake CLI; live service-failure/expired-auth transitions remain untested.
+- [ ] Validate real notification delivery and desktop-launched CLI discovery (PATH fallback is implemented).
 - [ ] Test suspend/resume and external CLI state reconciliation.
 - [ ] Validate home-folder installation, library/plugin discovery, launcher, autostart, and uninstall.
 - [ ] Inventory bundled Qt/KDE libraries and satisfy redistribution requirements.

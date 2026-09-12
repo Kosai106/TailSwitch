@@ -113,12 +113,12 @@ private slots:
         QVERIFY(!opaqueBounds.isEmpty());
         // The original 130x120 canvas rendered the 53-unit mark at roughly
         // half this width. Keep a deliberate but compact tray-safe margin.
-        QVERIFY(opaqueBounds.width() >= 53);
-        QVERIFY(opaqueBounds.height() >= 53);
-        QVERIFY(opaqueBounds.left() >= 3);
-        QVERIFY(opaqueBounds.top() >= 3);
-        QVERIFY(opaqueBounds.right() <= 60);
-        QVERIFY(opaqueBounds.bottom() <= 60);
+        QVERIFY(opaqueBounds.width() >= 51);
+        QVERIFY(opaqueBounds.height() >= 51);
+        QVERIFY(opaqueBounds.left() >= 4);
+        QVERIFY(opaqueBounds.top() >= 4);
+        QVERIFY(opaqueBounds.right() <= 59);
+        QVERIFY(opaqueBounds.bottom() <= 59);
     }
 
     void nativeMenuIsExported()

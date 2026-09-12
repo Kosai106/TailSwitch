@@ -21,8 +21,8 @@ The shared project directory, new executable, unrelated containers, and containe
 ## Icon polish
 
 - [x] Replace generated colored connected-dots artwork with the supplied Tailscale nine-dot logo.
-- [x] Crop the SVG from its 130×120 canvas to a square viewBox around the 53×53 artwork, retaining a balanced tray margin after visual feedback that the initial crop was too tight.
-- [x] Embed and palette-tint the SVG; test that its rendered alpha bounds retain at least three pixels of padding without restoring the old whitespace.
+- [x] Crop the SVG from its 130×120 canvas to a square viewBox around the 53×53 artwork, retaining a balanced tray margin after two rounds of visual feedback that the earlier crops were too tight.
+- [x] Embed and palette-tint the SVG; test that its rendered alpha bounds retain at least four pixels of padding without restoring the old whitespace.
 - [x] Stop routine Tailscale health messages from setting KDE `NeedsAttention`; retain health text in the header/details.
 - [ ] Get user confirmation that the logo is legible and no longer pulses for the currently reported health messages.
 

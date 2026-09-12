@@ -81,7 +81,16 @@ Run automated tests in the matching container runtime. The old Qt 6.4 test binar
 - Health messages are displayed only in a local plain-text details dialog. Raw status/error output, peer identifiers, authentication URLs, and clipboard contents are never logged. `--check-status` prints only state/counts.
 - CTest passed **5/5** entries, including synthetic parser/fake-CLI cases, UI/clipboard/notification tests on an isolated D-Bus session, output redaction, and the native-tray/ELF regressions.
 - Live host `--check-status` successfully parsed the actual connected backend and peers. Host tray smoke check also passed. No real clipboard writes or networking mutations were performed by automated checks.
-- Manual display/copying of real peers and long-running refresh behavior still need user confirmation. Explicit suspend/resume reconciliation and broader accessibility/scaling checks remain future work.
+- User confirmed the real status/device/copy workflow works as intended. Explicit suspend/resume reconciliation and broader accessibility/scaling checks remain future work.
+
+## Icon and attention-state polish
+
+- The original generated blue/green/gray/amber line-and-node icon was replaced with the user-supplied Tailscale nine-dot SVG.
+- The SVG's original `0 0 130 120` canvas placed approximately 53×53 units of artwork near its center. Its viewBox is now a square `37 32 57.04 57.04`, leaving roughly two source units around the artwork to avoid anti-aliasing clipping.
+- The asset is embedded as a Qt resource, so runtime does not depend on the source SVG being installed beside the executable. The solid/translucent alpha pattern is retained and tinted to `QPalette::WindowText` at startup for light/dark application-theme legibility.
+- A desktop test confirms the embedded icon renders and occupies at least 56×56 pixels of a 64×64 canvas, with a small nonzero margin. Host Wayland smoke startup continues to pass.
+- The yellow pulse was KDE rendering `NeedsAttention`, previously set for any nonempty Tailscale health list. Routine health messages now remain visible in the menu header and Status details while the notifier stays `Active`. `NeedsAttention` is reserved for login, machine approval, another-user state, or inability to read status; its attention icon uses the same logo rather than separate yellow artwork.
+- The logo is a Tailscale trademark and is explicitly excluded from the project's MIT grant in [the asset notice](../assets/README.md). Verify current brand/trademark requirements before public release.
 
 ## Remaining investigation
 
@@ -90,7 +99,8 @@ Run automated tests in the matching container runtime. The old Qt 6.4 test binar
 - [ ] Complete keyboard-navigation and scaling coverage for release.
 - [ ] Check TailSwitch naming conflicts; check TailTray if fallback is needed.
 - [x] Inspect status schema without persisting real tailnet data; construct synthetic fixtures.
-- [ ] Validate the real-device menu and copy workflow with the user.
+- [x] Validate the real-device menu and copy workflow with the user.
+- [ ] Validate the cropped, palette-tinted logo visually and confirm ordinary health messages no longer pulse.
 - [ ] Finalize saved-preference reads for controls. Unprivileged `debug prefs` works locally, but its unstable API/versioning/privacy implications need explicit handling.
 - [ ] Establish minimum supported Tailscale version and handling of unknown versions/fields.
 - [ ] Validate operator detection, existing-operator handling, setup, and revocation instructions.

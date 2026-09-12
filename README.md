@@ -7,7 +7,8 @@ A lightweight, unofficial Tailscale system-tray app for KDE Plasma on Steam Deck
 ## Available now
 
 - Native Plasma menus on both left-click and right-click.
-- Real connection state, with login/approval/initializing/disconnected states distinguished.
+- Embedded, tightly cropped Tailscale logo adapted to the current light/dark application palette.
+- Real connection state, with login/approval/initializing/disconnected states distinguished. Routine health messages stay in the header/details without pulsing the tray icon.
 - This device and peers: click to copy IPv4 through KDE Clipboard. Offline peers remain copyable; IPv6-only entries are disabled.
 - Automatic refresh, **Refresh now**, and **Status details** with locally displayed Tailscale health messages.
 - Bounded asynchronous CLI reads, failure recovery, and no repeated notifications for an unchanged error.
@@ -50,7 +51,7 @@ QT_QPA_PLATFORM=wayland ./build/kde-dev/tailswitch --smoke-test
 # Omit --smoke-test to read live Tailscale status and use the tray menu.
 ```
 
-This is a dynamically linked development build, not a portable release. The native tray item exports `ItemIsMenu=true` so Plasma can present the menu for both left-click and right-click, without an app-owned Wayland popup. The user confirmed the native tray replacement works. Copying uses Plasma's Clipboard manager (Klipper) via D-Bus; the user confirmed this clipboard approach works.
+This is a dynamically linked development build, not a portable release. The native tray item exports `ItemIsMenu=true` so Plasma can present the menu for both left-click and right-click, without an app-owned Wayland popup. The user confirmed the native tray replacement and real-device/copy workflow work. Copying uses Plasma's Clipboard manager (Klipper) via D-Bus.
 
 For a one-shot read that prints only state/counts (no tray or clipboard access):
 
@@ -70,4 +71,4 @@ TailSwitch is a provisional name pending availability checks; TailTray is the pr
 
 ## License
 
-Our code is licensed under [MIT](LICENSE). Qt, KDE Frameworks, and any other bundled third-party components retain their own licenses; release packaging must include the required notices and satisfy their redistribution obligations.
+Our code is licensed under [MIT](LICENSE). Qt, KDE Frameworks, and any other bundled third-party components retain their own licenses; release packaging must include the required notices and satisfy their redistribution obligations. The Tailscale logo is not covered by TailSwitch's MIT license; see [the asset notice](assets/README.md).

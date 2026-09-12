@@ -1,3 +1,4 @@
+#include "appicon.h"
 #include "kdeclipboard.h"
 #include "readonlytray.h"
 #include "tailscaleclient.h"
@@ -17,6 +18,7 @@ int main(int argc, char *argv[])
     QApplication::setApplicationName("TailSwitch");
     QApplication::setApplicationVersion("0.1.0-readonly");
     QApplication::setQuitOnLastWindowClosed(false);
+    QApplication::setWindowIcon(tailscaleLogoIcon());
 
     QCommandLineParser parser;
     parser.setApplicationDescription(

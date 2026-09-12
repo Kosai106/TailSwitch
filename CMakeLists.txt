@@ -7,11 +7,16 @@ find_package(KF6StatusNotifierItem 6.14 REQUIRED)
 qt_standard_project_setup()
 
 add_library(tailswitch_desktop STATIC
+    src/appicon.cpp src/appicon.h
     src/kdeclipboard.cpp src/kdeclipboard.h
     src/traymenu.cpp src/traymenu.h
     src/tailscalestatus.cpp src/tailscalestatus.h
     src/tailscaleclient.cpp src/tailscaleclient.h
     src/readonlytray.cpp src/readonlytray.h
+)
+qt_add_resources(tailswitch_desktop tailswitch_assets
+    PREFIX "/tailswitch"
+    FILES assets/tailscale.svg
 )
 target_compile_features(tailswitch_desktop PUBLIC cxx_std_17)
 target_include_directories(tailswitch_desktop PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src")

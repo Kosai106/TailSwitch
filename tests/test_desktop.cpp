@@ -1,3 +1,4 @@
+#include "appicon.h"
 #include "kdeclipboard.h"
 #include "readonlytray.h"
 #include "traymenu.h"
@@ -11,6 +12,7 @@
 #include <QDBusPendingReply>
 #include <QDBusVariant>
 #include <QFile>
+#include <QImage>
 #include <QMenu>
 #include <QPointer>
 #include <QSignalSpy>
@@ -92,6 +94,31 @@ private slots:
         QVERIFY(bus.registerService("org.freedesktop.Notifications"));
         QVERIFY(bus.registerObject("/org/freedesktop/Notifications", &m_notifications,
                                   QDBusConnection::ExportAllSlots));
+    }
+
+    void applicationIconIsEmbeddedAndCropped()
+    {
+        const QIcon icon = tailscaleLogoIcon();
+        QVERIFY(!icon.isNull());
+        const QImage image = icon.pixmap(64, 64).toImage();
+        QCOMPARE(image.size(), QSize(64, 64));
+        QRect opaqueBounds;
+        for (int y = 0; y < image.height(); ++y) {
+            for (int x = 0; x < image.width(); ++x) {
+                if (qAlpha(image.pixel(x, y)) > 0) {
+                    opaqueBounds |= QRect(x, y, 1, 1);
+                }
+            }
+        }
+        QVERIFY(!opaqueBounds.isEmpty());
+        // The original 130x120 canvas rendered the 53-unit mark at roughly
+        // half this width. Keep only a small anti-aliasing-safe margin.
+        QVERIFY(opaqueBounds.width() >= 56);
+        QVERIFY(opaqueBounds.height() >= 56);
+        QVERIFY(opaqueBounds.left() >= 1);
+        QVERIFY(opaqueBounds.top() >= 1);
+        QVERIFY(opaqueBounds.right() <= 62);
+        QVERIFY(opaqueBounds.bottom() <= 62);
     }
 
     void nativeMenuIsExported()
@@ -224,6 +251,10 @@ private slots:
         QVERIFY(parsed.status.has_value());
         auto status = *parsed.status;
         controller.applyStatus(status);
+        // The synthetic fixture has a health message. It stays visible in
+        // details/header but must not make Plasma pulse the icon.
+        QCOMPARE(tray.status(), KStatusNotifierItem::Active);
+        QVERIFY(!tray.iconPixmap().isNull());
 
         auto *devices = tray.contextMenu()->findChild<QMenu *>("devicesMenu");
         auto *self = tray.contextMenu()->findChild<QMenu *>("selfMenu");
@@ -260,6 +291,7 @@ private slots:
         const auto notificationsBefore = m_notifications.calls;
         const StatusFailure failure{StatusError::TimedOut, "Synthetic timeout"};
         controller.applyFailure(failure);
+        QCOMPARE(tray.status(), KStatusNotifierItem::NeedsAttention);
         QVERIFY(!self->actions()[0]->isEnabled());
         QVERIFY(!offline->isEnabled());
         QVERIFY(offline->data().toString().isEmpty());

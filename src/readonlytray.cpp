@@ -1,5 +1,6 @@
 #include "readonlytray.h"
 
+#include "appicon.h"
 #include "kdeclipboard.h"
 #include "traymenu.h"
 
@@ -7,37 +8,11 @@
 #include <QAction>
 #include <QApplication>
 #include <QDateTime>
-#include <QIcon>
 #include <QMenu>
 #include <QMessageBox>
-#include <QPainter>
-#include <QPixmap>
 #include <QSet>
 
 namespace {
-
-QIcon statusIcon(const QColor &color)
-{
-    QIcon icon;
-    for (const int size : {22, 32, 48, 64, 128}) {
-        QPixmap pixmap(size, size);
-        pixmap.fill(Qt::transparent);
-        QPainter painter(&pixmap);
-        painter.setRenderHint(QPainter::Antialiasing);
-        painter.scale(size / 32.0, size / 32.0);
-        painter.setPen(QPen(color, 2.5));
-        painter.drawLine(QPointF(8, 9), QPointF(24, 16));
-        painter.drawLine(QPointF(8, 23), QPointF(24, 16));
-        painter.setPen(Qt::NoPen);
-        painter.setBrush(color);
-        for (const auto point : {QPointF(8, 9), QPointF(8, 23), QPointF(24, 16)}) {
-            painter.drawEllipse(point, 4, 4);
-        }
-        painter.end();
-        icon.addPixmap(pixmap);
-    }
-    return icon;
-}
 
 QString deviceLabel(const TailDevice &device, bool peer)
 {
@@ -122,9 +97,12 @@ ReadOnlyTray::ReadOnlyTray(KStatusNotifierItem &tray, TailscaleClient &client,
     connect(&client, &TailscaleClient::statusReceived, this, &ReadOnlyTray::applyStatus);
     connect(&client, &TailscaleClient::failed, this, &ReadOnlyTray::applyFailure);
 
+    const QIcon icon = tailscaleLogoIcon();
     m_tray.setTitle("TailSwitch");
     m_tray.setCategory(KStatusNotifierItem::Communications);
-    m_tray.setIconByPixmap(statusIcon(QColor("#60a5fa")));
+    m_tray.setIconByPixmap(icon);
+    m_tray.setAttentionIconByPixmap(icon);
+    m_tray.setToolTipIconByPixmap(icon);
     m_tray.setToolTipTitle("TailSwitch — reading status");
     m_tray.setStatus(KStatusNotifierItem::Active);
     updateDetails("Waiting for the first status read. No networking settings are changed by this app.");
@@ -180,16 +158,14 @@ void ReadOnlyTray::applyStatus(const TailscaleStatus &status)
 {
     m_hasStatus = true;
     m_lastFailure.reset();
-    const bool attention = needsAttention(status.state) || !status.health.isEmpty();
+    // Health messages remain visible in the header/details, but do not pulse
+    // the tray icon. Reserve NeedsAttention for states requiring user action.
+    const bool attention = needsAttention(status.state);
     const QString label = connectionLabel(status.state)
         + (!status.health.isEmpty() ? QString(" · Health warning") : QString{});
     m_header->setText("TailSwitch · " + label);
     m_tray.setToolTipTitle("TailSwitch — " + label);
     m_tray.setStatus(attention ? KStatusNotifierItem::NeedsAttention : KStatusNotifierItem::Active);
-    const auto color = attention ? QColor("#fbbf24")
-        : status.state == ConnectionState::Connected ? QColor("#4ade80")
-        : status.state == ConnectionState::Disconnected ? QColor("#9ca3af") : QColor("#60a5fa");
-    m_tray.setIconByPixmap(statusIcon(color));
     m_self->setText(deviceLabel(status.self, false));
     m_self->setData(status.self.ipv4);
     m_empty->setText("No devices reported");
@@ -212,7 +188,6 @@ void ReadOnlyTray::applyFailure(const StatusFailure &failure)
     m_hasStatus = false;
     m_header->setText("TailSwitch · Status unavailable");
     m_tray.setToolTipTitle("TailSwitch — status unavailable");
-    m_tray.setIconByPixmap(statusIcon(QColor("#fbbf24")));
     m_tray.setStatus(KStatusNotifierItem::NeedsAttention);
     m_self->setText("Status unavailable");
     m_self->setData(QString{});

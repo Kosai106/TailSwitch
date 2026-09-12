@@ -22,7 +22,7 @@ Do not reuse `build/dev`: it contains the old Ubuntu 24.04 CMake cache and execu
 CTest runs:
 
 - **tailscale_status_and_client:** synthetic JSON parsing, known backend states, invalid structures, online-first sorting, IPv4 selection, absent fields, fragmented output, error classification, crashes/timeouts/output limits, executable discovery, paths with spaces, request coalescing, recovery, and periodic refresh through a fake CLI.
-- **desktop_behaviors:** native tray-menu export/ownership, fake clipboard acknowledgement/failure, live device-menu reconciliation, offline copying, missing-IPv4 disabling, stale-action invalidation, and repeated-error notification suppression.
+- **desktop_behaviors:** embedded/cropped application icon, native tray-menu export/ownership, fake clipboard acknowledgement/failure, live device-menu reconciliation, offline copying, missing-IPv4 disabling, stale-action invalidation, ordinary-health non-pulsing behavior, and repeated-error notification suppression.
 - **no_copy_relocations:** inspect the executable's ELF relocations to prevent a known SteamOS Qt loader failure.
 - **check_status_summary:** run the full app's one-shot checker against the fake CLI and reject fixture names, IPs, health text, or authentication markers in its output.
 - **cli_help:** verify command-line help without a desktop session.
@@ -65,14 +65,14 @@ Quit any old instance first, then run:
 QT_QPA_PLATFORM=wayland ./build/kde-dev/tailswitch
 ```
 
-1. Find the connected-dots tray icon. It starts blue while reading, then reflects reported connection/attention state; green means connected, gray disconnected, and amber attention needed.
+1. Find the Tailscale nine-dot logo in the tray. It is embedded in the executable, cropped to the artwork with a small anti-aliasing margin, and tinted using the application's current foreground palette for light/dark legibility.
 2. Left-click and right-click the icon separately. Both should open Plasma's menu without a Wayland grabbing-popup warning.
 3. Confirm **This device** and **Devices** show the expected Tailscale IPv4 addresses. Online peers sort first; offline peers remain visible and copyable. Peers with no IPv4 are disabled, rather than copying an endpoint, route, IPv6, or empty text.
 4. Click a device to replace your clipboard text with its IPv4, then paste into a text editor. Check quiet success feedback. Repeat from both click paths and, when available, with an offline peer.
 5. Keep the device submenu open across the 10-second refresh interval. Unchanged actions should retain their identity rather than being cleared/rebuilt. Check **Refresh now** too.
-6. Open **Status details**. It shows guidance for the reported backend state, last successful read time, CLI version, and health messages as local plain text. Connected status is not an end-to-end connectivity diagnosis.
+6. Open **Status details**. It shows guidance for the reported backend state, last successful read time, CLI version, and health messages as local plain text. Connected status is not an end-to-end connectivity diagnosis. Ordinary health messages may add “Health warning” to the menu header but must not pulse the icon. Login/approval/other-user states and unreadable status still request attention.
 7. Check **About**, then **Quit**. Closing dialogs must not exit the app; quitting must not disconnect Tailscale.
-8. Record regressions in [follow-ups](TODO.md). Initial native-menu validation and old-container cleanup are complete; the real-peer workflow needs confirmation.
+8. Record regressions in [follow-ups](TODO.md). Native menus, old-container cleanup, and the real peer/copy workflow have been confirmed; the revised icon still needs visual confirmation.
 
 Do not disconnect Tailscale, stop its daemon, or alter operator permissions just to test failure handling without explicit approval. Use the fake CLI for those tests.
 

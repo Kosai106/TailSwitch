@@ -16,7 +16,15 @@ The shared project directory, new executable, unrelated containers, and containe
 - [x] Display real connection status, local IPv4, and sorted peers with copying and quiet feedback.
 - [x] Add periodic/manual refresh, actionable failures, health details, stale-action handling, and repeated-error suppression.
 - [x] Validate the live host with the sanitized `--check-status` command; native tray smoke check passes.
-- [ ] Get user confirmation of real peer display, offline-IP copying, health details, and menu stability across refreshes.
+- [x] User confirmed the real status/device/copy workflow works as intended.
+
+## Icon polish
+
+- [x] Replace generated colored connected-dots artwork with the supplied Tailscale nine-dot logo.
+- [x] Crop the SVG from its 130×120 canvas to a square viewBox around the 53×53 artwork, retaining a small anti-aliasing margin.
+- [x] Embed and palette-tint the SVG; test that its rendered alpha bounds fill the tray canvas rather than retaining the old whitespace.
+- [x] Stop routine Tailscale health messages from setting KDE `NeedsAttention`; retain health text in the header/details.
+- [ ] Get user confirmation that the logo is legible and no longer pulses for the currently reported health messages.
 
 ## Next development step
 

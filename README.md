@@ -33,7 +33,7 @@ distrobox enter tailswitch-kde-dev -- cmake --build "$PWD/build/kde-dev"
 distrobox enter tailswitch-kde-dev -- ctest --test-dir "$PWD/build/kde-dev" --output-on-failure
 ```
 
-The old `tailswitch-dev` container is retained until the replacement passes manual validation. Do not reuse its `build/dev` cache or executable for these checks.
+The replacement passed user validation and the old `tailswitch-dev` container has been removed. Its ignored `build/dev` artifacts remain; use only `build/kde-dev` for current builds and launches.
 
 Run on the host:
 
@@ -42,7 +42,7 @@ QT_QPA_PLATFORM=wayland ./build/kde-dev/tailswitch --smoke-test
 # Or omit --smoke-test to explore the tray menu and manually test copying.
 ```
 
-This is a dynamically linked development build, not a portable release. The native tray item exports `ItemIsMenu=true` so Plasma can present the menu for both left-click and right-click, without an app-owned Wayland popup. Manual validation of this replacement is pending. Copying uses Plasma's Clipboard manager (Klipper) via D-Bus; the user confirmed this clipboard approach works.
+This is a dynamically linked development build, not a portable release. The native tray item exports `ItemIsMenu=true` so Plasma can present the menu for both left-click and right-click, without an app-owned Wayland popup. The user confirmed the native tray replacement works. Copying uses Plasma's Clipboard manager (Klipper) via D-Bus; the user confirmed this clipboard approach works.
 
 Automated coverage checks CLI help, native D-Bus tray-menu export, menu ownership, clipboard success/failure through a fake service, and absence of ELF copy relocations. Run tests in Distrobox with its matching Qt Test runtime. Fake-CLI tests are planned with the actual Tailscale adapter.
 

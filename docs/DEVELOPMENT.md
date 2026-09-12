@@ -15,7 +15,7 @@ distrobox enter tailswitch-kde-dev -- cmake --build "$PWD/build/kde-dev"
 distrobox enter tailswitch-kde-dev -- ctest --test-dir "$PWD/build/kde-dev" --output-on-failure
 ```
 
-Do not reuse `build/dev`: it contains the old Ubuntu 24.04 CMake cache and executable. The old `tailswitch-dev` container is retained temporarily; see the [cleanup reminder](TODO.md).
+Do not reuse `build/dev`: it contains the old Ubuntu 24.04 CMake cache and executable. The old `tailswitch-dev` container was removed after successful user validation; see the [migration record](TODO.md).
 
 ## Automated checks
 
@@ -58,7 +58,7 @@ QT_QPA_PLATFORM=wayland ./build/kde-dev/tailswitch
 5. Paste into a text editor and verify the value. Reopen the menu to see quiet copy feedback. Repeat from both left-click and right-click menus.
 6. Try **About**, close the dialog, and confirm the tray app stays running.
 7. Choose **Quit** and confirm the icon disappears. Optionally test whether Plasma retains the copied value after exit.
-8. After confirming these checks, return to the [old-container cleanup reminder](TODO.md).
+8. Record any regressions in the [follow-ups](TODO.md). Initial user validation and old-container cleanup are complete.
 
 Copying uses KDE's Klipper session-bus API. Plasma's Clipboard manager must be running. The action is disabled while its bounded request is pending; service acknowledgement shows quiet success. Failure/timeout re-enables the action, marks failure in the menu, and requests an error notification. The app does not read clipboard contents/history or fall back to an ineffective unfocused clipboard write.
 

@@ -15,7 +15,7 @@ Local observations, not a complete supported-version matrix:
 | Host build tools | Compiler/CMake not installed; keep SteamOS base untouched |
 | Active build environment | `tailswitch-kde-dev`, Ubuntu 26.04 under Distrobox |
 | Active toolchain | CMake 4.2.3, GCC 15.2.0, Qt 6.10.2, KF6StatusNotifierItem 6.24.0 |
-| Retained old environment | `tailswitch-dev`, Ubuntu 24.04, Qt 6.4.2; pending cleanup after user validation |
+| Retired environment | `tailswitch-dev`, Ubuntu 24.04, Qt 6.4.2; removed after successful user validation |
 | Container engine | Podman 6.0.2; builds verified |
 | Host ABI | x86_64, glibc 2.43 |
 | Git | 2.55.0; main branch; user-configured author identity |
@@ -41,7 +41,7 @@ The first QClipboard-based implementation failed in user testing. A menu exporte
 
 Host introspection confirmed `org.kde.klipper.klipper.setClipboardContents(s)` at `org.kde.klipper`, `/klipper`. The implementation now calls that API asynchronously with a 3-second timeout, acknowledges success only after a successful reply, and reports errors without a silent Qt fallback. It never reads clipboard/history contents.
 
-**User confirmed that copying works** after this change. Recheck it with the new native tray implementation; clipboard code is unchanged. Automated tests only use a fake clipboard service.
+**User confirmed that copying works** after this change and subsequently confirmed the native tray replacement works after being asked to recheck copying and both click paths. Clipboard code is unchanged. Automated tests only use a fake clipboard service.
 
 ### Left-click tray menus
 
@@ -53,7 +53,7 @@ The earlier smoke result only established that a popup was requested, not that t
 
 The replacement uses **KStatusNotifierItem::setIsMenu(true)** (introduced in KDE Frameworks 6.14). Plasma reads `ItemIsMenu=true` and presents the exported D-Bus menu for primary click as well as right-click. There is no custom activation callback, fake focus window, or app-owned `QMenu::popup()` path. KStatusNotifierItem owns its heap-allocated menu.
 
-Ubuntu 24.04 does not provide the needed KF6 development package. The user provisioned Ubuntu 26.04 as a separate container; the old container has not been deleted.
+Ubuntu 24.04 does not provide the needed KF6 development package. The user provisioned Ubuntu 26.04 as a separate container. After the user confirmed the replacement works, the old container was removed; the new container and shared repository were preserved.
 
 ### New-container validation
 
@@ -65,14 +65,15 @@ Ubuntu 24.04 does not provide the needed KF6 development package. The user provi
 - Live host introspection confirmed `ItemIsMenu = true`, `Menu = /MenuBar`, and the `com.canonical.dbusmenu` interface with `GetLayout`, `Event`, and `AboutToShow` methods.
 - `ldd` resolved Qt and KDE libraries from the host with no missing dependencies reported.
 - Offscreen/missing-tray check exited 2 with an actionable diagnostic.
-- Manual left/right-click behavior, positioning, keyboard focus, and clipboard regression testing are still pending. Protocol checks alone do not prove the compositor's visual behavior.
+- User confirmed the replacement works after being asked to verify left-click, right-click, and clipboard behavior. This supplements the protocol checks; comprehensive scaling and keyboard-navigation coverage remain release checks.
 
 Run automated tests in the matching container runtime. The old Qt 6.4 test binary failed against host Qt 6.11 due to a missing Qt Test internal symbol; the application itself does not link Qt Test.
 
 ## Remaining investigation
 
-- [ ] Get manual confirmation of native left/right-click menus, focus, scaling, clipboard, and absence of the grabbing-popup warning.
-- [ ] **Remove the old `tailswitch-dev` container after the replacement is confirmed working.** Keep it while validation is pending; see [follow-ups](TODO.md).
+- [x] Get user confirmation that native left/right-click menus and clipboard work.
+- [x] Remove the old `tailswitch-dev` container after successful validation; verified the replacement and shared project remain intact. See [follow-ups](TODO.md).
+- [ ] Complete keyboard-navigation and scaling coverage for release.
 - [ ] Check TailSwitch naming conflicts; check TailTray if fallback is needed.
 - [ ] Inspect status schema without persisting real tailnet data; construct synthetic fixtures.
 - [ ] Verify an unprivileged saved-preference read mechanism; document versioning/privacy risks if a debug API is necessary.

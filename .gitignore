@@ -1,0 +1,17 @@
+# Out-of-source builds and local installations
+/build/
+/build-*/
+/_install/
+/dist/
+
+# Local IDE configuration
+/.idea/
+/.vscode/
+CMakeUserPresets.json
+*.user
+
+# Local diagnostics and secrets (use synthetic test fixtures)
+/local/
+*.log
+.env
+.env.*

@@ -4,7 +4,11 @@ on:
   push:
     branches: ["main"]
     tags: ["v*"]
+    # Documentation-only pushes skip the build. GitHub does not apply path
+    # filters to tag pushes, so releases always build.
+    paths-ignore: ["**.md"]
   pull_request:
+    paths-ignore: ["**.md"]
 
 permissions:
   contents: read

@@ -8,6 +8,7 @@ qt_standard_project_setup()
 
 add_library(tailswitch_desktop STATIC
     src/appicon.cpp src/appicon.h
+    src/autostart.cpp src/autostart.h
     src/kdeclipboard.cpp src/kdeclipboard.h
     src/traymenu.cpp src/traymenu.h
     src/tailscalestatus.cpp src/tailscalestatus.h
@@ -30,6 +31,13 @@ target_compile_options(tailswitch_desktop PUBLIC
 
 qt_add_executable(tailswitch src/main.cpp)
 target_link_libraries(tailswitch PRIVATE tailswitch_desktop)
+target_compile_definitions(tailswitch PRIVATE TAILSWITCH_VERSION="${PROJECT_VERSION}")
+
+include(GNUInstallDirs)
+install(TARGETS tailswitch RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
+install(FILES packaging/tailswitch.desktop DESTINATION "${CMAKE_INSTALL_DATADIR}/applications")
+install(FILES assets/tailscale.svg RENAME tailswitch.svg
+    DESTINATION "${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps")
 
 foreach(target tailswitch tailswitch_desktop)
     set_target_properties(${target} PROPERTIES CXX_EXTENSIONS OFF)

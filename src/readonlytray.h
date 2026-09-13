@@ -7,6 +7,7 @@
 #include <QPointer>
 #include <QTimer>
 
+class Autostart;
 class QAction;
 class KdeClipboard;
 class KStatusNotifierItem;
@@ -17,8 +18,10 @@ class ReadOnlyTray final : public QObject
 {
     Q_OBJECT
 public:
+    // autostart may be null when launch-at-login is not offered (tests).
     ReadOnlyTray(KStatusNotifierItem &tray, TailscaleClient &client,
-                 KdeClipboard &clipboard, QObject *parent = nullptr);
+                 KdeClipboard &clipboard, Autostart *autostart = nullptr,
+                 QObject *parent = nullptr);
     ~ReadOnlyTray() override;
 
 public slots:
@@ -31,9 +34,12 @@ private:
     void updateCopyActions();
     void showDetails();
     void updateDetails(const QString &text);
+    void showAbout();
+    void toggleAutostart(bool enabled);
 
     KStatusNotifierItem &m_tray;
     KdeClipboard &m_clipboard;
+    Autostart *m_autostart;
     QMenu *m_menu;
     QMenu *m_devices;
     QAction *m_header;
@@ -41,6 +47,7 @@ private:
     QAction *m_empty;
     QAction *m_copyFeedback;
     QAction *m_refresh;
+    QAction *m_autostartAction = nullptr;
     QHash<QString, QAction *> m_peers;
     QStringList m_order;
     QString m_detailsText;

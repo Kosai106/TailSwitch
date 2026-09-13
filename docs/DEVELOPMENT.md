@@ -1,10 +1,20 @@
-# Development and smoke testing
+# Development, testing, and releasing
 
-## Build in Distrobox
+## Build environment
 
-Use `tailswitch-kde-dev` (Ubuntu 26.04), with `build-essential`, `cmake`, `ninja-build`, `qt6-base-dev`, `qt6-base-dev-tools`, `libkf6statusnotifieritem-dev`, `extra-cmake-modules`, `git`, `pkg-config`, and `dbus-daemon`.
+SteamOS ships no compiler, so build in the `tailswitch-kde-dev` Distrobox container (Ubuntu 26.04). Create it once:
 
-CMake requires Qt >= 6.8 and KF6StatusNotifierItem >= 6.14; installed framework versions can impose higher transitive Qt requirements. The verified container has Qt 6.10.2 and KF6StatusNotifierItem 6.24.0.
+```sh
+distrobox create --name tailswitch-kde-dev --image docker.io/library/ubuntu:26.04
+distrobox enter tailswitch-kde-dev -- sudo apt-get update
+distrobox enter tailswitch-kde-dev -- sudo apt-get install -y build-essential cmake ninja-build git pkg-config dbus-daemon qt6-base-dev qt6-base-dev-tools qt6-svg-plugins libkf6statusnotifieritem-dev extra-cmake-modules
+```
+
+`qt6-svg-plugins` provides the Qt SVG icon engine that renders the embedded tray logo at runtime; it is a plugin, not a link-time dependency, so a build without it succeeds but the icon tests fail and the tray icon would be blank. SteamOS ships it as `qt6-svg`. CMake requires Qt >= 6.8 and KF6StatusNotifierItem >= 6.14 (for `setIsMenu`). The container provides Qt 6.10.2 and KF6 6.24.0; the CI workflow uses the same image so shipped binaries match.
+
+Runtime compatibility works in one direction: a binary built against Qt 6.10 needs Qt >= 6.10 on the host (the executable carries `Qt_6.10` symbol versions). It needs only glibc >= 2.34. Building in a container with a newer Qt than SteamOS would produce a binary that fails to load, so keep the container's Qt at or below the SteamOS stable release you intend to support.
+
+## Build and test
 
 From the host:
 
@@ -15,88 +25,91 @@ distrobox enter tailswitch-kde-dev -- cmake --build "$PWD/build/kde-dev"
 distrobox enter tailswitch-kde-dev -- ctest --test-dir "$PWD/build/kde-dev" --output-on-failure
 ```
 
-Do not reuse `build/dev`: it contains the old Ubuntu 24.04 CMake cache and executable. The old `tailswitch-dev` container was removed after successful user validation; see the [migration record](TODO.md).
+Run the tests inside the container so they use its matching Qt Test library; the application itself does not link Qt Test.
 
-## Automated checks
+### Automated checks
 
 CTest runs:
 
 - **tailscale_status_and_client:** synthetic JSON parsing, known backend states, invalid structures, online-first sorting, IPv4 selection, absent fields, fragmented output, error classification, crashes/timeouts/output limits, executable discovery, paths with spaces, request coalescing, recovery, and periodic refresh through a fake CLI.
-- **desktop_behaviors:** embedded/cropped application icon, native tray-menu export/ownership, fake clipboard acknowledgement/failure, live device-menu reconciliation, offline copying, missing-IPv4 disabling, stale-action invalidation, ordinary-health non-pulsing behavior, and repeated-error notification suppression.
-- **no_copy_relocations:** inspect the executable's ELF relocations to prevent a known SteamOS Qt loader failure.
-- **check_status_summary:** run the full app's one-shot checker against the fake CLI and reject fixture names, IPs, health text, or authentication markers in its output.
-- **cli_help:** verify command-line help without a desktop session.
+- **desktop_behaviors:** embedded/cropped application icon, native tray-menu export/ownership, fake clipboard acknowledgement/failure, live device-menu reconciliation, offline copying, missing-IPv4 disabling, stale-action invalidation, ordinary-health non-pulsing behavior, repeated-error notification suppression, autostart entry lifecycle, and the **Start at login** menu toggle.
+- **no_copy_relocations:** inspects the executable's ELF relocations to prevent a known SteamOS Qt loader failure (see below).
+- **check_status_summary:** runs the one-shot checker against the fake CLI and rejects fixture names, IPs, health text, or authentication markers in its output.
+- **cli_help:** verifies command-line help without a desktop session.
 
-All fixtures are synthetic. The fake CLI refuses any arguments except `status --json`; it never calls real Tailscale. Desktop tests use fake StatusNotifierWatcher, Klipper, and notification services under a private `dbus-run-session`, never the real tray/clipboard/notifications. The tray test reads the actual exported `ItemIsMenu` and `Menu` properties and checks the D-Bus menu interface. Merely observing `QMenu::aboutToShow` or offscreen visibility cannot prove Wayland accepted a popup grab, so those are no longer used as success criteria.
+All fixtures are synthetic. The fake CLI refuses any arguments except `status --json`; it never calls real Tailscale. Desktop tests use fake StatusNotifierWatcher, Klipper, and notification services under a private `dbus-run-session`, never the real tray, clipboard, or notifications. Autostart tests write into a temporary directory, never `~/.config/autostart`.
 
-Run automated tests inside Distrobox against its matching Qt Test version. The earlier Qt 6.4 test executable failed against host Qt 6.11 due to a missing Qt Test internal symbol; the application does not link Qt Test.
+### Why `-fPIC`
 
-## Host runtime check
+SteamOS's Qt exports protected data symbols that reject ELF copy relocations. The desktop library and everything linking it are compiled with `-fPIC`; default PIE alone was insufficient and produced a loader error about `QByteArray::_empty`. The `no_copy_relocations` test guards this.
 
-Run on the **host**, not inside Distrobox, to check SteamOS's runtime libraries:
+## Manual checks on the Deck
+
+Run these on the **host**, not inside the container.
+
+Tray and library check (no Tailscale or clipboard access, exits after about 1.5 s):
 
 ```sh
 QT_QPA_PLATFORM=wayland ./build/kde-dev/tailswitch --smoke-test
 ```
 
-This reports compile/runtime Qt versions, platform, tray availability, and native menu-only configuration. It briefly shows the icon and exits after approximately 1.5 seconds. It does not access Tailscale or change the clipboard. Exit code 2 means a required tray capability was unavailable. A successful exit does not prove visual rendering or clipboard transfer.
+Exit code 2 means no tray was available. With `QT_QPA_PLATFORM=offscreen` it should report no tray and exit 2 rather than linger invisibly.
 
-The host D-Bus contract can also be inspected while the app runs: `/StatusNotifierItem` must export `org.kde.StatusNotifierItem.ItemIsMenu = true`, and its `Menu` property must reference a valid `com.canonical.dbusmenu` object. On the verified host, that object is `/MenuBar`. The item can use a separate unique bus connection from the app's main connection; do not assume a fixed well-known service name. Use `busctl --user list` to find the app's connections and introspect them.
-
-Do **not** simulate primary activation by calling `Activate` and expect a local popup: menu-only items tell Plasma to present the exported menu instead.
-
-## Read-only CLI check
+Read-only CLI check, printing only state and counts:
 
 ```sh
 QT_QPA_PLATFORM=offscreen ./build/kde-dev/tailswitch --check-status
-# If the installed CLI is not found automatically:
-QT_QPA_PLATFORM=offscreen ./build/kde-dev/tailswitch --check-status --tailscale-path /opt/tailscale/tailscale
 ```
 
-This reads `tailscale status --json` once, printing only connection state, peer count, local-IPv4 availability, and health-message count. Exit 0 means a supported status was read, not necessarily that networking is connected. Failure prints a generic actionable message and exits 1. Device names/addresses, raw errors, health text, and authentication URLs are not printed.
-
-Normal mode locates the CLI using PATH plus `/opt/tailscale/tailscale`, `/usr/local/bin/tailscale`, and `/usr/bin/tailscale`. An explicit path must be absolute and executable; a bad override is not silently ignored. The adapter uses no shell, normalizes CLI error language with `LC_ALL=C`, and does not execute `up`, `down`, `set`, login, or debug-preference commands.
-
-## Manual live tray and clipboard check
-
-Quit any old instance first, then run:
-
-```sh
-QT_QPA_PLATFORM=wayland ./build/kde-dev/tailswitch
-```
-
-1. Find the Tailscale nine-dot logo in the tray. It is embedded in the executable, cropped to the artwork with a small anti-aliasing margin, and tinted using the application's current foreground palette for light/dark legibility.
-2. Left-click and right-click the icon separately. Both should open Plasma's menu without a Wayland grabbing-popup warning.
-3. Confirm **This device** and **Devices** show the expected Tailscale IPv4 addresses. Online peers sort first; offline peers remain visible and copyable. Peers with no IPv4 are disabled, rather than copying an endpoint, route, IPv6, or empty text.
-4. Click a device to replace your clipboard text with its IPv4, then paste into a text editor. Check quiet success feedback. Repeat from both click paths and, when available, with an offline peer.
-5. Keep the device submenu open across the 10-second refresh interval. Unchanged actions should retain their identity rather than being cleared/rebuilt. Check **Refresh now** too.
-6. Open **Status details**. It shows guidance for the reported backend state, last successful read time, CLI version, and health messages as local plain text. Connected status is not an end-to-end connectivity diagnosis. Ordinary health messages may add “Health warning” to the menu header but must not pulse the icon. Login/approval/other-user states and unreadable status still request attention.
-7. Check **About**, then **Quit**. Closing dialogs must not exit the app; quitting must not disconnect Tailscale.
-8. Record regressions in [follow-ups](TODO.md). Native menus, old-container cleanup, and the real peer/copy workflow have been confirmed; the revised icon still needs visual confirmation.
-
-Do not disconnect Tailscale, stop its daemon, or alter operator permissions just to test failure handling without explicit approval. Use the fake CLI for those tests.
-
-For a synthetic UI preview without querying your tailnet:
+Live run with a synthetic tailnet, without querying yours (clicking still changes your real clipboard):
 
 ```sh
 TAILSWITCH_FAKE_SCENARIO=success QT_QPA_PLATFORM=wayland \
   ./build/kde-dev/tailswitch --tailscale-path "$PWD/build/kde-dev/fake_tailscale"
 ```
 
-The fake executable is a developer-test artifact backed by `tests/fixtures`. Its IPs are synthetic; clicking still explicitly changes your real clipboard.
+Live run against your real Tailscale:
 
-Copying uses KDE's Klipper session-bus API. Plasma's Clipboard manager must be running. The action is disabled while its bounded request is pending; service acknowledgement shows quiet success. Failure/timeout re-enables the action, marks failure in the menu, and requests an error notification. The app does not read clipboard contents/history or fall back to an ineffective unfocused clipboard write.
+```sh
+QT_QPA_PLATFORM=wayland ./build/kde-dev/tailswitch
+```
 
-In normal mode, device data is real and held in memory only. Status polls run every 10 seconds, with no overlapping requests, a 5-second timeout, and an 8 MiB combined retained-output cap. Failed reads invalidate copy actions until recovery; identical consecutive failures produce only one requested notification. Health messages are visible in Status details, not logged or automatically copied.
+Then walk through:
 
-Connection/exit-node controls, autostart, explicit suspend/resume integration, real failure-notification delivery, and distributable packaging remain unimplemented or unvalidated. Periodic polling resumes with the event loop, but immediate resume handling still needs work.
+1. Left-click and right-click both open Plasma's menu without a Wayland grabbing-popup warning.
+2. **This device** and **Devices** show the expected IPv4 addresses; online peers sort first; offline peers are copyable; peers without IPv4 are disabled.
+3. Clicking a device replaces the clipboard text with its IPv4 and shows quiet confirmation.
+4. Keeping the device submenu open across the 10-second refresh does not rebuild it.
+5. **Status details** shows guidance, the CLI version, last read time, and health messages. Ordinary health warnings do not pulse the icon.
+6. **Start at login** writes `~/.config/autostart/tailswitch.desktop` when checked and removes it when unchecked. The entry launches the executable you toggled it from, so toggle it from an installed copy, not a build directory, before relying on it.
+7. Launching a second copy prints "already running" and exits 0 without adding a tray icon.
+8. **About** and **Quit** behave; closing dialogs does not exit; quitting does not disconnect Tailscale.
 
-For missing-tray handling, `QT_QPA_PLATFORM=offscreen ./build/kde-dev/tailswitch --smoke-test` should report no tray and exit 2, rather than linger invisibly.
+Do not disconnect Tailscale, stop its daemon, or change operator permissions just to test failure handling. Use the fake CLI scenarios (`hang`, `crash`, `flood`, `permission`, `daemon`, `login-text`, `failure`, `bad-json`, `bad-schema`, `stopped`, `login`, `fragmented`) instead.
 
-## Runtime dependencies
+Copying uses Klipper's session-bus API because a menu exported to Plasma can trigger actions without giving this process a Wayland input serial, which makes `QClipboard` writes silently ineffective. Success is the service's acknowledgement, not an independent paste check; the app never reads clipboard contents or history.
 
-The development executable dynamically links Qt and KDE libraries; it is not a portable release. The host needs KF6StatusNotifierItem >= 6.14 for menu-only support, plus compatible transitive dependencies.
+## Installing a local build
 
-The new Ubuntu toolchain initially produced an executable that failed against SteamOS Qt with a protected `QByteArray::_empty` symbol/copy-relocation error. Compiling the desktop library and its executable/test consumers with `-fPIC` avoids direct external-data access through ELF copy relocations. Default PIE alone was insufficient. Keep the CTest relocation guard.
+The release archive's `install.sh` is the supported path. For a quick local install of a development build:
 
-Successful execution on this Deck does not establish compatibility with other SteamOS versions. Do not copy container Qt plugins into the host Qt installation or mix plugin/library versions. Release packaging and Qt/KDE dependency licensing will be validated separately.
+```sh
+distrobox enter tailswitch-kde-dev -- cmake --install "$PWD/build/kde-dev" --prefix "$HOME/.local"
+```
+
+The installed desktop entry uses `Exec=tailswitch`, which requires `~/.local/bin` on the launcher's PATH. The release installer instead rewrites `Exec` to the absolute path, so prefer it for anything you keep around.
+
+## Releasing
+
+1. Update the version in `CMakeLists.txt` (`project(TailSwitch VERSION x.y.z ...)`) and add a `CHANGELOG.md` entry with the date.
+2. Build and test the archive locally:
+
+   ```sh
+   distrobox enter tailswitch-kde-dev -- ./packaging/make-release.sh
+   ```
+
+   This configures `build/release` as a Release build, runs CTest, strips the binary, and writes `dist/tailswitch-x.y.z-linux-x86_64.tar.gz` plus a SHA-256 file. The archive contains the binary, desktop entry, icon, install/uninstall scripts, license, changelog, and trademark notice.
+3. Test the archive on the Deck: extract it, run `./install.sh`, launch from the application menu, toggle **Start at login**, log out and back in, then `./uninstall.sh`. To dry-run the installer without touching your real home, run it with `HOME` pointed at a scratch directory.
+4. Commit, tag `vx.y.z`, and push the tag. The GitHub Actions workflow rebuilds the archive in an `ubuntu:26.04` container, checks that the tag matches the CMake version, and attaches the archive and checksum to a GitHub release.
+
+The shipped binary links dynamically against SteamOS's own Qt and KDE Frameworks libraries and does not redistribute them, so no third-party library notices ship in the archive. If a future release bundles Qt or KDE libraries, add their license notices and satisfy the LGPL's relinking requirements before publishing.

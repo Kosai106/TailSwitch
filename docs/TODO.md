@@ -1,33 +1,37 @@
 # Follow-ups
 
-## Build-container migration
+## 0.1.0 release checklist
 
-- [x] Validate the `tailswitch-kde-dev` Ubuntu 26.04 build and automated tests (3/3 CTest entries passed).
-- [x] Validate startup against SteamOS's host libraries and inspect native D-Bus menu export. Required `-fPIC` to avoid protected Qt data-symbol copy relocations; host smoke and protocol checks passed.
-- [x] User confirmed the replacement works after being asked to verify left-click, right-click, and copying.
-- [x] Removed the old `tailswitch-dev` Ubuntu 24.04 container with `distrobox rm --force tailswitch-dev` after confirmation. Verified it no longer exists and `tailswitch-kde-dev` remains running.
+Done in the repository:
 
-The shared project directory, new executable, unrelated containers, and container images were not removed. The old ignored `build/dev` artifacts remain; use `build/kde-dev` for all current builds and launches.
+- [x] Version 0.1.0 reported by `--version`, the About dialog, and the startup diagnostics.
+- [x] Opt-in **Start at login** through an XDG autostart entry, with tests.
+- [x] Single-instance guard via the `io.github.kosai106.TailSwitch` session-bus name; verified live on the Deck.
+- [x] Desktop entry, icon, and CMake install rules.
+- [x] Home-directory `install.sh`/`uninstall.sh`, verified against a scratch `HOME`; the desktop entry passes `desktop-file-validate`.
+- [x] `packaging/make-release.sh` builds, tests, strips, and archives; verified in the container.
+- [x] GitHub Actions workflow for CI and tagged releases.
+- [x] Public README, changelog, and updated development/compatibility docs.
+- [x] Name check: no Tailscale-related "TailSwitch" project found. The name is also used by an unrelated 2017 Perl log-tailing tool on CPAN (`App::tailswitch`), which does not conflict with a Tailscale tray.
+- [x] Removed the stale `build/dev` artifacts from the retired container.
 
-## Read-only milestone
+Needs the user on the Deck:
 
-- [x] Inspect local status schema and preference-read availability without saving real tailnet dumps.
-- [x] Implement an asynchronous, bounded, tested status CLI adapter and typed status parser.
-- [x] Display real connection status, local IPv4, and sorted peers with copying and quiet feedback.
-- [x] Add periodic/manual refresh, actionable failures, health details, stale-action handling, and repeated-error suppression.
-- [x] Validate the live host with the sanitized `--check-status` command; native tray smoke check passes.
-- [x] User confirmed the real status/device/copy workflow works as intended.
+- [ ] Confirm the current tray logo is legible in the light and dark Breeze themes and no longer pulses for ordinary health messages.
+- [ ] Extract the release archive, run `install.sh`, launch from the application menu, and check the launcher icon.
+- [ ] Toggle **Start at login** from the installed copy, log out and back into Desktop Mode, and confirm exactly one tray icon appears.
+- [ ] Push the branch and confirm the GitHub Actions build passes before tagging `v0.1.0`.
+- [ ] Optional: add a tray/menu screenshot to the README.
 
-## Icon polish
+## Known limitations to carry into 0.2
 
-- [x] Replace generated colored connected-dots artwork with the supplied Tailscale nine-dot logo.
-- [x] Crop the SVG from its 130×120 canvas to a square viewBox around the 53×53 artwork, retaining a balanced tray margin after two rounds of visual feedback that the earlier crops were too tight.
-- [x] Embed and palette-tint the SVG; test that its rendered alpha bounds retain at least four pixels of padding without restoring the old whitespace.
-- [x] Stop routine Tailscale health messages from setting KDE `NeedsAttention`; retain health text in the header/details.
-- [ ] Get user confirmation that the logo is legible and no longer pulses for the currently reported health messages.
+- The prebuilt binary needs Qt >= 6.10 at runtime (SteamOS 3.9 or newer). Supporting the SteamOS 3.8 stable channel means building against Qt 6.9 in a different container image; confirm the stable channel's Qt version first.
+- Keyboard navigation and HiDPI scaling of the Plasma-rendered menu have not been checked systematically.
+- Suspend/resume relies on the regular poll; there is no immediate refresh on resume.
+- Real notification delivery has been exercised manually only for copy failures and status failures.
 
 ## Next development step
 
-- [ ] Design targeted connect/disconnect and exit-node mutations, with verified saved-preference reads and operator permission handling.
+- [ ] Design targeted connect/disconnect and exit-node mutations, with verified saved-preference reads and operator permission handling (see [PLAN.md](PLAN.md)).
 - [ ] Request permission before disruptive real-network integration tests. Keep fake-CLI tests as the default.
-- [ ] Continue the remaining compatibility and release checks in [COMPATIBILITY.md](COMPATIBILITY.md).
+- [ ] Continue the remaining compatibility checks in [COMPATIBILITY.md](COMPATIBILITY.md).

@@ -92,12 +92,25 @@ Run automated tests in the matching container runtime. The old Qt 6.4 test binar
 - The yellow pulse was KDE rendering `NeedsAttention`, previously set for any nonempty Tailscale health list. Routine health messages now remain visible in the menu header and Status details while the notifier stays `Active`. `NeedsAttention` is reserved for login, machine approval, another-user state, or inability to read status; its attention icon uses the same logo rather than separate yellow artwork.
 - The logo is a Tailscale trademark and is explicitly excluded from the project's MIT grant in [the asset notice](../assets/README.md). Verify current brand/trademark requirements before public release.
 
+## Release binary requirements
+
+Measured on the 0.1.0 release build from the Ubuntu 26.04 container:
+
+| Requirement | Value |
+| --- | --- |
+| glibc | >= 2.34 (symbol versions up to `GLIBC_2.34`) |
+| libstdc++ | `GLIBCXX_3.4.30` |
+| Qt | >= 6.10 (`Qt_6.10` symbol version); SteamOS 3.10 ships 6.11.1 |
+| KF6StatusNotifierItem | >= 6.14 for `ItemIsMenu`; SteamOS 3.10 ships 6.28.0 |
+
+The Qt requirement is the binding one: the SteamOS 3.8 stable channel (Plasma 6.4) is expected to ship an older Qt, so the prebuilt archive targets SteamOS 3.9 or newer. `install.sh` runs `tailswitch --version` first and refuses to install a binary that cannot load. The single-instance guard registers `io.github.kosai106.TailSwitch` on the session bus and was verified live: a second launch exits 0 without a second tray icon.
+
 ## Remaining investigation
 
 - [x] Get user confirmation that native left/right-click menus and clipboard work.
 - [x] Remove the old `tailswitch-dev` container after successful validation; verified the replacement and shared project remain intact. See [follow-ups](TODO.md).
 - [ ] Complete keyboard-navigation and scaling coverage for release.
-- [ ] Check TailSwitch naming conflicts; check TailTray if fallback is needed.
+- [x] Check TailSwitch naming conflicts: nothing Tailscale-related found; an unrelated CPAN log-tailing tool shares the name. Keeping TailSwitch.
 - [x] Inspect status schema without persisting real tailnet data; construct synthetic fixtures.
 - [x] Validate the real-device menu and copy workflow with the user.
 - [ ] Validate the cropped, palette-tinted logo visually and confirm ordinary health messages no longer pulse.
@@ -107,8 +120,8 @@ Run automated tests in the matching container runtime. The old Qt 6.4 test binar
 - [x] Test daemon-unavailable, login-required, and permission-denied handling with a fake CLI; live service-failure/expired-auth transitions remain untested.
 - [ ] Validate real notification delivery and desktop-launched CLI discovery (PATH fallback is implemented).
 - [ ] Test suspend/resume and external CLI state reconciliation.
-- [ ] Validate home-folder installation, library/plugin discovery, launcher, autostart, and uninstall.
-- [ ] Inventory bundled Qt/KDE libraries and satisfy redistribution requirements.
+- [x] Validate home-folder installation and uninstall scripts against a scratch `HOME`; the desktop entry validates. Launcher icon and real login autostart still need a check on the Deck.
+- [x] No Qt/KDE libraries are bundled; the release links against SteamOS's own, so no redistribution notices are required for 0.1.0.
 
 ## Build environment setup
 
@@ -117,9 +130,9 @@ User-provisioned replacement:
 ```sh
 distrobox create --name tailswitch-kde-dev --image docker.io/library/ubuntu:26.04
 distrobox enter tailswitch-kde-dev -- sudo apt-get update
-distrobox enter tailswitch-kde-dev -- sudo apt-get install -y build-essential cmake ninja-build git pkg-config dbus-daemon qt6-base-dev qt6-base-dev-tools libkf6statusnotifieritem-dev extra-cmake-modules
+distrobox enter tailswitch-kde-dev -- sudo apt-get install -y build-essential cmake ninja-build git pkg-config dbus-daemon qt6-base-dev qt6-base-dev-tools qt6-svg-plugins libkf6statusnotifieritem-dev extra-cmake-modules
 ```
 
-Build into `build/kde-dev`, not the old `build/dev` cache. See [development instructions](DEVELOPMENT.md).
+Build into `build/kde-dev` (Debug) or let `packaging/make-release.sh` use `build/release`. See [development instructions](DEVELOPMENT.md).
 
 The project lives in the shared home directory, outside either container's writable root. Package installation happens inside the container. Distrobox is a development convenience, not a security sandbox. Do not disable SteamOS read-only protection, change global Git identity, or remove the shared project directory when retiring a container.

@@ -1,74 +1,108 @@
 # TailSwitch
 
-A lightweight, unofficial Tailscale system-tray app for KDE Plasma on Steam Deck, built with C++ and Qt 6 Widgets.
+A small, unofficial Tailscale tray for KDE Plasma on the Steam Deck. It sits in the Desktop Mode system tray, shows whether Tailscale is connected, and lets you copy any device's Tailscale IPv4 address with one click.
 
-**Status:** working read-only preview for the Steam Deck's KDE Wayland session. Displays real Tailscale connection state, this device's IPv4, and sorted peers with click-to-copy. Refreshes every 10 seconds and reports errors/health warnings. Connection and exit-node controls are not implemented yet.
+TailSwitch is not affiliated with or endorsed by Tailscale Inc.
 
-## Available now
+## What it does
 
-- Native Plasma menus on both left-click and right-click.
-- Embedded, tightly cropped Tailscale logo adapted to the current light/dark application palette.
-- Real connection state, with login/approval/initializing/disconnected states distinguished. Routine health messages stay in the header/details without pulsing the tray icon.
-- This device and peers: click to copy IPv4 through KDE Clipboard. Offline peers remain copyable; IPv6-only entries are disabled.
-- Automatic refresh, **Refresh now**, and **Status details** with locally displayed Tailscale health messages.
-- Bounded asynchronous CLI reads, failure recovery, and no repeated notifications for an unchanged error.
+- Shows the connection state in the tray menu and tooltip: connected, disconnected, connecting, sign-in required, device approval required, and more.
+- Lists this device and every peer in your tailnet, online devices first. Click a device to copy its Tailscale IPv4. Offline devices stay copyable; devices without an IPv4 are shown disabled.
+- Opens the same menu on left-click and right-click, using Plasma's native tray menu.
+- Refreshes every 10 seconds, or on demand with **Refresh now**.
+- **Status details** shows guidance for the current state, the Tailscale CLI version, and Tailscale's own health messages.
+- **Start at login** (off by default) launches TailSwitch with each Desktop Mode login.
 
-## Planned v1
+## What it does not do
 
-- Connect and disconnect without changing existing Tailscale preferences.
-- List devices, including offline peers, and click to copy their Tailscale IPv4.
-- Select an exit node and control local-network access while using one.
-- Optional launch at Desktop Mode login.
-- Run unprivileged against an existing, installed and authenticated Tailscale service.
-- Install in the user's home directory without modifying SteamOS's read-only system.
+TailSwitch 0.1 is a status view. It only ever runs `tailscale status --json`.
 
-Quitting the app will not disconnect Tailscale. An unavailable exit node will never be silently disabled or replaced.
+- It does not connect, disconnect, choose exit nodes, or change any Tailscale setting. Use the `tailscale` CLI or Tailscale's own tools for that.
+- It does not sign you in. Tailscale must already be installed and logged in.
+- It does not run as root, store credentials, log device names or addresses, or send anything anywhere.
+- Quitting or uninstalling it leaves Tailscale exactly as it was.
 
-## Project documents
+Connection and exit-node controls are planned; see [the roadmap](docs/PLAN.md).
 
-- [Approved plan](docs/PLAN.md)
-- [Compatibility findings and remaining checks](docs/COMPATIBILITY.md)
-- [Build and manual smoke-test instructions](docs/DEVELOPMENT.md)
-- [Follow-ups, including old-container cleanup](docs/TODO.md)
+## Requirements
 
-## Development
+- A Steam Deck in Desktop Mode (KDE Plasma 6, Wayland). Other KDE Plasma 6 desktops on x86_64 Linux may work but are untested.
+- SteamOS 3.9 or newer. The prebuilt binary links against the Qt 6.10 and KDE Frameworks 6.14 libraries that ship with SteamOS, so it will not load on older releases. Only SteamOS 3.10 has been tested.
+- Tailscale installed and logged in, with the CLI at `/opt/tailscale/tailscale`, `/usr/bin/tailscale`, `/usr/local/bin/tailscale`, or on your PATH. Tested with Tailscale 1.102.3.
 
-Stack: C++17 / Qt 6 Widgets / KDE Frameworks StatusNotifierItem / CMake. Build in the `tailswitch-kde-dev` Ubuntu 26.04 Distrobox container (Qt >= 6.8, KF6StatusNotifierItem >= 6.14):
+## Install
 
-```sh
-cd /home/deck/Developer/TailSwitch
-distrobox enter tailswitch-kde-dev -- cmake -S "$PWD" -B "$PWD/build/kde-dev" -G Ninja -DCMAKE_BUILD_TYPE=Debug
-distrobox enter tailswitch-kde-dev -- cmake --build "$PWD/build/kde-dev"
-distrobox enter tailswitch-kde-dev -- ctest --test-dir "$PWD/build/kde-dev" --output-on-failure
+Everything goes into your home directory; SteamOS's read-only system is not modified and no password is needed.
+
+1. Download `tailswitch-<version>-linux-x86_64.tar.gz` from the [latest release](https://github.com/Kosai106/TailSwitch/releases/latest).
+2. In Konsole:
+
+   ```sh
+   tar xzf tailswitch-*-linux-x86_64.tar.gz
+   cd tailswitch-*-linux-x86_64
+   ./install.sh
+   ```
+
+3. Launch **TailSwitch** from the application menu (under Network), or run `~/.local/bin/tailswitch`.
+4. Optionally turn on **Start at login** in the tray menu.
+
+To remove it, run `./uninstall.sh` from the same folder. It stops the tray, deletes the installed files and the autostart entry, and leaves Tailscale untouched.
+
+## Using the tray
+
+```text
+TailSwitch · Connected
+Status view only · use the CLI to connect or disconnect
+────────────────────────
+This device      >  steamdeck · 100.x.y.z
+Devices (3)      >  laptop · 100.x.y.z
+                    server · 100.x.y.z
+                    phone · 100.x.y.z · Offline
+Click a device to copy its IPv4
+────────────────────────
+Refresh now
+Status details…
+☐ Start at login
+About…
+Quit
 ```
 
-The replacement passed user validation and the old `tailswitch-dev` container has been removed. Its ignored `build/dev` artifacts remain; use only `build/kde-dev` for current builds and launches.
+Copying goes through Plasma's clipboard manager (Klipper), which must be running. The menu confirms each copy quietly; a failed copy shows a notification instead of pretending it worked.
 
-Run on the host:
+The tray icon requests attention only when you need to act: sign-in required, device approval required, Tailscale in use by another user, or status unreadable. Ordinary Tailscale health warnings stay in the menu header and **Status details** without pulsing the icon.
+
+## Troubleshooting
+
+- **"Tailscale CLI not found"**: install Tailscale, or launch with `tailswitch --tailscale-path /absolute/path/to/tailscale`.
+- **"Status unavailable"**: open **Status details** for the reason. Common causes are a stopped `tailscaled` service, an expired login, or missing permission to read status. TailSwitch keeps retrying automatically.
+- **Copy failed**: Plasma's Clipboard manager is not running. Check the system tray's Clipboard entry in Desktop Mode.
+- **No tray icon**: TailSwitch needs a Plasma session with a system tray. It exits with code 2 when none is available, so it does nothing in Gaming Mode.
+- **Diagnostics without touching your clipboard**:
+
+  ```sh
+  tailswitch --smoke-test     # tray and library check, exits after 1.5 s
+  tailswitch --check-status   # prints only state and counts, never names or addresses
+  ```
+
+## Building from source
+
+TailSwitch is C++17 with Qt 6 Widgets, KDE Frameworks' StatusNotifierItem, and CMake. Build it in a container or on any system with Qt >= 6.8 and KF6StatusNotifierItem >= 6.14:
 
 ```sh
-QT_QPA_PLATFORM=wayland ./build/kde-dev/tailswitch --smoke-test
-# Omit --smoke-test to read live Tailscale status and use the tray menu.
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build
+ctest --test-dir build --output-on-failure
+./packaging/make-release.sh   # builds, tests, and writes dist/tailswitch-<version>-linux-x86_64.tar.gz
 ```
 
-This is a dynamically linked development build, not a portable release. The native tray item exports `ItemIsMenu=true` so Plasma can present the menu for both left-click and right-click, without an app-owned Wayland popup. The user confirmed the native tray replacement and real-device/copy workflow work. Copying uses Plasma's Clipboard manager (Klipper) via D-Bus.
+See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for the Steam Deck Distrobox setup, the test suite, manual checks, and the release process. Compatibility notes live in [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md).
 
-For a one-shot read that prints only state/counts (no tray or clipboard access):
+## Contributing
 
-```sh
-QT_QPA_PLATFORM=offscreen ./build/kde-dev/tailswitch --check-status
-```
-
-CLI discovery uses PATH plus common paths, including `/opt/tailscale/tailscale`. Override it with `--tailscale-path /absolute/path/to/tailscale` if needed. The app only invokes `tailscale status --json`; it never starts login or changes preferences.
-
-Automated coverage includes synthetic status fixtures, a fake CLI, timeout/crash/output-limit/error/recovery tests, periodic refresh, native D-Bus menu export, live menu reconciliation and clipboard behavior through fake services, sanitized status-check output, and ELF copy-relocation checks. Run tests in Distrobox with its matching Qt Test runtime.
-
-Do not commit real tailnet status, device identifiers, login URLs, credentials, or raw preference dumps. Test fixtures must use synthetic data.
-
-## Name and affiliation
-
-TailSwitch is a provisional name pending availability checks; TailTray is the preferred fallback, also subject to checking. This project is not affiliated with or endorsed by Tailscale.
+Issues and pull requests are welcome. Please keep real tailnet data out of the repository: test fixtures must be synthetic, and bug reports should not include device names, addresses, login URLs, or raw `tailscale status` output.
 
 ## License
 
-Our code is licensed under [MIT](LICENSE). Qt, KDE Frameworks, and any other bundled third-party components retain their own licenses; release packaging must include the required notices and satisfy their redistribution obligations. The Tailscale logo is not covered by TailSwitch's MIT license; see [the asset notice](assets/README.md).
+TailSwitch's code is licensed under the [MIT License](LICENSE). It links dynamically against the Qt and KDE Frameworks libraries already present on SteamOS and does not redistribute them.
+
+The Tailscale name and logo are trademarks of Tailscale Inc., used here only to identify the software TailSwitch works with. The logo is not covered by the MIT license; see [assets/README.md](assets/README.md).

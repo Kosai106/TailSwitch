@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=TailSwitch
+GenericName=Tailscale tray
+Comment=Tailscale status and device addresses in the system tray
+Exec=tailswitch
+TryExec=tailswitch
+Icon=tailswitch
+Terminal=false
+StartupNotify=false
+Categories=Network;Qt;KDE;
+Keywords=Tailscale;VPN;tailnet;tray;

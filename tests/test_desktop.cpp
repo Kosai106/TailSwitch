@@ -1,4 +1,5 @@
 #include "appicon.h"
+#include "autostart.h"
 #include "kdeclipboard.h"
 #include "readonlytray.h"
 #include "traymenu.h"
@@ -11,11 +12,13 @@
 #include <QDBusPendingCallWatcher>
 #include <QDBusPendingReply>
 #include <QDBusVariant>
+#include <QDir>
 #include <QFile>
 #include <QImage>
 #include <QMenu>
 #include <QPointer>
 #include <QSignalSpy>
+#include <QTemporaryDir>
 #include <QtTest>
 
 class FakeKlipper final : public QObject, protected QDBusContext
@@ -99,7 +102,8 @@ private slots:
     void applicationIconIsEmbeddedAndCropped()
     {
         const QIcon icon = tailscaleLogoIcon();
-        QVERIFY(!icon.isNull());
+        QVERIFY2(!icon.isNull(),
+                 "Embedded SVG did not render; the Qt SVG icon engine plugin (qt6-svg-plugins) is required");
         const QImage image = icon.pixmap(64, 64).toImage();
         QCOMPARE(image.size(), QSize(64, 64));
         QRect opaqueBounds;
@@ -309,6 +313,75 @@ private slots:
         QTRY_COMPARE(m_notifications.calls, notificationsBefore + 2);
         bus.unregisterObject("/klipper");
         QVERIFY(bus.unregisterService("org.tailswitch.TestClipboard"));
+    }
+
+    void autostartEntryLifecycle()
+    {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString autostartDir = dir.path() + "/config/autostart";
+        Autostart autostart(autostartDir, "/tmp/synthetic dir/tail\"switch");
+        QVERIFY(!autostart.isEnabled());
+        QVERIFY(autostart.setEnabled(false)); // Disabling a missing entry is fine.
+        QVERIFY(!QFile::exists(autostart.filePath()));
+
+        QString error;
+        QVERIFY2(autostart.setEnabled(true, &error), qPrintable(error));
+        QVERIFY(autostart.isEnabled());
+        QFile file(autostart.filePath());
+        QVERIFY(file.open(QIODevice::ReadOnly));
+        const QString contents = QString::fromUtf8(file.readAll());
+        QVERIFY(contents.startsWith("[Desktop Entry]\n"));
+        QVERIFY(contents.contains("Type=Application\n"));
+        QVERIFY(contents.contains("Exec=\"/tmp/synthetic dir/tail\\\"switch\"\n"));
+        QVERIFY(!contents.contains("Hidden=true"));
+        // Re-enabling is idempotent and the file stays a single entry.
+        QVERIFY(autostart.setEnabled(true, &error));
+        QCOMPARE(QDir(autostartDir).entryList(QDir::Files).size(), 1);
+
+        QVERIFY(autostart.setEnabled(false, &error));
+        QVERIFY(!autostart.isEnabled());
+        QVERIFY(!QFile::exists(autostart.filePath()));
+
+        // An entry the user hid through KDE's autostart settings counts as off.
+        QVERIFY(QDir().mkpath(autostartDir));
+        QFile hidden(autostart.filePath());
+        QVERIFY(hidden.open(QIODevice::WriteOnly));
+        hidden.write("[Desktop Entry]\nType=Application\nHidden=true\n");
+        hidden.close();
+        QVERIFY(!autostart.isEnabled());
+
+        Autostart relative(autostartDir, "tailswitch");
+        QVERIFY(!relative.setEnabled(true, &error));
+        QVERIFY(error.contains("absolute"));
+        QCOMPARE(Autostart::quoteExec("/plain/path"), QString("\"/plain/path\""));
+        QCOMPARE(Autostart::quoteExec("/a$b`c\\d"), QString("\"/a\\$b\\`c\\\\d\""));
+    }
+
+    void menuTogglesAutostart()
+    {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        Autostart autostart(dir.path() + "/autostart", "/synthetic/tailswitch");
+        KdeClipboard clipboard(nullptr, QDBusConnection::sessionBus(), "org.tailswitch.MissingClipboard");
+        TailscaleClient client; // Never started.
+        KStatusNotifierItem tray(QStringLiteral("tailswitch-autostart-test"));
+        ReadOnlyTray controller(tray, client, clipboard, &autostart);
+        auto *action = tray.contextMenu()->findChild<QAction *>("autostartAction");
+        QVERIFY(action);
+        QVERIFY(action->isCheckable());
+        QVERIFY(!action->isChecked()); // Disabled by default.
+        action->trigger();
+        QVERIFY(action->isChecked());
+        QVERIFY(autostart.isEnabled());
+        action->trigger();
+        QVERIFY(!action->isChecked());
+        QVERIFY(!autostart.isEnabled());
+
+        // Without an autostart manager the menu simply omits the item.
+        KStatusNotifierItem plainTray(QStringLiteral("tailswitch-no-autostart-test"));
+        ReadOnlyTray plain(plainTray, client, clipboard);
+        QVERIFY(!plainTray.contextMenu()->findChild<QAction *>("autostartAction"));
     }
 
     void cleanupTestCase()

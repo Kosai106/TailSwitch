@@ -101,6 +101,8 @@ The installed desktop entry uses `Exec=tailswitch`, which requires `~/.local/bin
 
 ## Releasing
 
+The repository ships a Claude Code skill, `/release` (`.claude/skills/release/SKILL.md`), that walks through this process step by step, including the Deck checks and the release-page cleanup. The short version:
+
 1. Update the version in `CMakeLists.txt` (`project(TailSwitch VERSION x.y.z ...)`) and add a `CHANGELOG.md` entry with the date.
 2. Build and test the archive locally:
 

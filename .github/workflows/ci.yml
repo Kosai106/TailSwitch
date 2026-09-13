@@ -22,7 +22,7 @@ jobs:
           apt-get update
           DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
             build-essential cmake ninja-build git pkg-config dbus-daemon binutils \
-            qt6-base-dev qt6-base-dev-tools libkf6statusnotifieritem-dev \
+            qt6-base-dev qt6-base-dev-tools qt6-svg-plugins libkf6statusnotifieritem-dev \
             extra-cmake-modules ca-certificates
       - uses: actions/checkout@v4
       - name: Build release archive

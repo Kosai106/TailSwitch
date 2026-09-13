@@ -130,7 +130,7 @@ User-provisioned replacement:
 ```sh
 distrobox create --name tailswitch-kde-dev --image docker.io/library/ubuntu:26.04
 distrobox enter tailswitch-kde-dev -- sudo apt-get update
-distrobox enter tailswitch-kde-dev -- sudo apt-get install -y build-essential cmake ninja-build git pkg-config dbus-daemon qt6-base-dev qt6-base-dev-tools libkf6statusnotifieritem-dev extra-cmake-modules
+distrobox enter tailswitch-kde-dev -- sudo apt-get install -y build-essential cmake ninja-build git pkg-config dbus-daemon qt6-base-dev qt6-base-dev-tools qt6-svg-plugins libkf6statusnotifieritem-dev extra-cmake-modules
 ```
 
 Build into `build/kde-dev` (Debug) or let `packaging/make-release.sh` use `build/release`. See [development instructions](DEVELOPMENT.md).

@@ -102,7 +102,8 @@ private slots:
     void applicationIconIsEmbeddedAndCropped()
     {
         const QIcon icon = tailscaleLogoIcon();
-        QVERIFY(!icon.isNull());
+        QVERIFY2(!icon.isNull(),
+                 "Embedded SVG did not render; the Qt SVG icon engine plugin (qt6-svg-plugins) is required");
         const QImage image = icon.pixmap(64, 64).toImage();
         QCOMPARE(image.size(), QSize(64, 64));
         QRect opaqueBounds;

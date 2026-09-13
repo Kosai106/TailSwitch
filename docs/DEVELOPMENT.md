@@ -7,10 +7,10 @@ SteamOS ships no compiler, so build in the `tailswitch-kde-dev` Distrobox contai
 ```sh
 distrobox create --name tailswitch-kde-dev --image docker.io/library/ubuntu:26.04
 distrobox enter tailswitch-kde-dev -- sudo apt-get update
-distrobox enter tailswitch-kde-dev -- sudo apt-get install -y build-essential cmake ninja-build git pkg-config dbus-daemon qt6-base-dev qt6-base-dev-tools libkf6statusnotifieritem-dev extra-cmake-modules
+distrobox enter tailswitch-kde-dev -- sudo apt-get install -y build-essential cmake ninja-build git pkg-config dbus-daemon qt6-base-dev qt6-base-dev-tools qt6-svg-plugins libkf6statusnotifieritem-dev extra-cmake-modules
 ```
 
-CMake requires Qt >= 6.8 and KF6StatusNotifierItem >= 6.14 (for `setIsMenu`). The container provides Qt 6.10.2 and KF6 6.24.0; the CI workflow uses the same image so shipped binaries match.
+`qt6-svg-plugins` provides the Qt SVG icon engine that renders the embedded tray logo at runtime; it is a plugin, not a link-time dependency, so a build without it succeeds but the icon tests fail and the tray icon would be blank. SteamOS ships it as `qt6-svg`. CMake requires Qt >= 6.8 and KF6StatusNotifierItem >= 6.14 (for `setIsMenu`). The container provides Qt 6.10.2 and KF6 6.24.0; the CI workflow uses the same image so shipped binaries match.
 
 Runtime compatibility works in one direction: a binary built against Qt 6.10 needs Qt >= 6.10 on the host (the executable carries `Qt_6.10` symbol versions). It needs only glibc >= 2.34. Building in a container with a newer Qt than SteamOS would produce a binary that fails to load, so keep the container's Qt at or below the SteamOS stable release you intend to support.
 

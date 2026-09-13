@@ -1,4 +1,5 @@
 #include "appicon.h"
+#include "autostart.h"
 #include "kdeclipboard.h"
 #include "readonlytray.h"
 #include "tailscaleclient.h"
@@ -6,23 +7,34 @@
 #include <KStatusNotifierItem>
 #include <QApplication>
 #include <QCommandLineParser>
+#include <QDBusConnection>
 #include <QSystemTrayIcon>
 #include <QTextStream>
 #include <QTimer>
 
 #include <cstdio>
 
+namespace {
+// Owning this well-known bus name marks the running tray instance, so a
+// second launch (for example from the app menu while autostarted) exits
+// instead of adding a duplicate tray icon.
+constexpr auto kInstanceService = "io.github.kosai106.TailSwitch";
+}
+
 int main(int argc, char *argv[])
 {
     QApplication app(argc, argv);
     QApplication::setApplicationName("TailSwitch");
-    QApplication::setApplicationVersion("0.1.0-readonly");
+    QApplication::setApplicationVersion(TAILSWITCH_VERSION);
+    QApplication::setOrganizationDomain("kosai106.github.io");
+    QApplication::setDesktopFileName("tailswitch");
     QApplication::setQuitOnLastWindowClosed(false);
     QApplication::setWindowIcon(tailscaleLogoIcon());
 
     QCommandLineParser parser;
     parser.setApplicationDescription(
-        "Unofficial, read-only Tailscale tray client. No network controls yet.");
+        "Unofficial Tailscale status tray for KDE Plasma on Steam Deck. "
+        "Shows connection state and copies device addresses; it never changes Tailscale settings.");
     parser.addHelpOption();
     parser.addVersionOption();
     const QCommandLineOption smokeTest(
@@ -66,6 +78,7 @@ int main(int argc, char *argv[])
     }
 
     const bool trayAvailable = QSystemTrayIcon::isSystemTrayAvailable();
+    diagnostics << "TailSwitch " << TAILSWITCH_VERSION << Qt::endl;
     diagnostics << "Qt build: " << QT_VERSION_STR << " runtime: " << qVersion() << Qt::endl;
     diagnostics << "Platform: " << QGuiApplication::platformName() << Qt::endl;
     diagnostics << "System tray available: " << (trayAvailable ? "yes" : "no") << Qt::endl;
@@ -74,9 +87,18 @@ int main(int argc, char *argv[])
         return 2;
     }
 
+    if (!parser.isSet(smokeTest)) {
+        auto bus = QDBusConnection::sessionBus();
+        if (bus.isConnected() && !bus.registerService(QLatin1String(kInstanceService))) {
+            diagnostics << "TailSwitch is already running; the existing tray icon stays in place." << Qt::endl;
+            return 0;
+        }
+    }
+
     KdeClipboard clipboard;
     KStatusNotifierItem tray(QStringLiteral("TailSwitch"));
-    ReadOnlyTray controller(tray, client, clipboard);
+    Autostart autostart = Autostart::forCurrentUser();
+    ReadOnlyTray controller(tray, client, clipboard, &autostart);
     diagnostics << "Native menu-only tray: " << (tray.isMenu() ? "yes" : "no") << Qt::endl;
     if (parser.isSet(smokeTest)) {
         QTimer::singleShot(1500, &app, [&app, &tray, &diagnostics] {

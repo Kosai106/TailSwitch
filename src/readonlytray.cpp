@@ -1,6 +1,7 @@
 #include "readonlytray.h"
 
 #include "appicon.h"
+#include "autostart.h"
 #include "kdeclipboard.h"
 #include "traymenu.h"
 
@@ -11,6 +12,7 @@
 #include <QMenu>
 #include <QMessageBox>
 #include <QSet>
+#include <QSignalBlocker>
 
 namespace {
 
@@ -34,14 +36,14 @@ bool needsAttention(ConnectionState state)
 } // namespace
 
 ReadOnlyTray::ReadOnlyTray(KStatusNotifierItem &tray, TailscaleClient &client,
-                           KdeClipboard &clipboard, QObject *parent)
-    : QObject(parent), m_tray(tray), m_clipboard(clipboard), m_menu(new QMenu)
+                           KdeClipboard &clipboard, Autostart *autostart, QObject *parent)
+    : QObject(parent), m_tray(tray), m_clipboard(clipboard), m_autostart(autostart), m_menu(new QMenu)
 {
     configureTrayMenu(m_tray, *m_menu); // The native item owns this heap menu.
     m_header = m_menu->addAction("TailSwitch · Reading status…");
     m_header->setObjectName("connectionStatus");
     m_header->setEnabled(false);
-    m_menu->addAction("Read-only · Network controls coming next")->setEnabled(false);
+    m_menu->addAction("Status view only · use the CLI to connect or disconnect")->setEnabled(false);
     m_menu->addSeparator();
     auto *selfMenu = m_menu->addMenu("This device");
     selfMenu->setObjectName("selfMenu");
@@ -64,17 +66,14 @@ ReadOnlyTray::ReadOnlyTray(KStatusNotifierItem &tray, TailscaleClient &client,
         m_refresh->setText(busy ? "Refreshing…" : "Refresh now");
     });
     connect(m_menu->addAction("Status details…"), &QAction::triggered, this, &ReadOnlyTray::showDetails);
-    connect(m_menu->addAction("About…"), &QAction::triggered, this, [this] {
-        auto *dialog = new QMessageBox(QMessageBox::Information, "About TailSwitch",
-            "TailSwitch — read-only preview\n\n"
-            "An unofficial client, not affiliated with or endorsed by Tailscale.\n"
-            "Displays local CLI status and copies Tailscale IPv4 addresses using KDE Clipboard.\n"
-            "It does not change Tailscale settings or initiate login.", QMessageBox::Ok);
-        dialog->setTextFormat(Qt::PlainText);
-        dialog->setAttribute(Qt::WA_DeleteOnClose);
-        connect(this, &QObject::destroyed, dialog, &QWidget::close);
-        dialog->show();
-    });
+    if (m_autostart) {
+        m_autostartAction = m_menu->addAction("Start at login");
+        m_autostartAction->setObjectName("autostartAction");
+        m_autostartAction->setCheckable(true);
+        m_autostartAction->setChecked(m_autostart->isEnabled());
+        connect(m_autostartAction, &QAction::toggled, this, &ReadOnlyTray::toggleAutostart);
+    }
+    connect(m_menu->addAction("About…"), &QAction::triggered, this, &ReadOnlyTray::showAbout);
     connect(m_menu->addAction("Quit"), &QAction::triggered, qApp, &QApplication::quit);
 
     m_copyReset.setSingleShot(true);
@@ -238,4 +237,35 @@ void ReadOnlyTray::updateDetails(const QString &text)
 {
     m_detailsText = text;
     if (m_details) m_details->setText(text);
+}
+
+void ReadOnlyTray::showAbout()
+{
+    auto *dialog = new QMessageBox(QMessageBox::Information, "About TailSwitch",
+        QString("TailSwitch %1\n\n"
+                "An unofficial Tailscale tray for KDE Plasma on Steam Deck. "
+                "Not affiliated with or endorsed by Tailscale Inc.\n\n"
+                "Shows the local Tailscale status and copies device IPv4 addresses "
+                "through KDE's clipboard. It never changes Tailscale settings, "
+                "starts a login, or disconnects you.\n\n"
+                "https://github.com/Kosai106/TailSwitch\n\n"
+                "Licensed under the MIT License. The Tailscale logo is a trademark "
+                "of Tailscale Inc. and is not covered by that license.")
+            .arg(QApplication::applicationVersion()),
+        QMessageBox::Ok);
+    dialog->setTextFormat(Qt::PlainText);
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    connect(this, &QObject::destroyed, dialog, &QWidget::close);
+    dialog->show();
+}
+
+void ReadOnlyTray::toggleAutostart(bool enabled)
+{
+    if (!m_autostart) return;
+    QString error;
+    if (m_autostart->setEnabled(enabled, &error)) return;
+    // Revert the checkmark without re-entering this handler, then report.
+    QSignalBlocker blocker(m_autostartAction);
+    m_autostartAction->setChecked(m_autostart->isEnabled());
+    m_tray.showMessage("TailSwitch — could not change autostart", error, "dialog-warning");
 }
